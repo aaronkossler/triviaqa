@@ -14,6 +14,7 @@ def get_key_to_ground_truth(data):
 def get_question_doc_string(qid, doc_name):
     return '{}--{}'.format(qid, doc_name)
 
+
 def get_qd_to_answer(data):
     key_to_answer = {}
     for datum in data['Data']:
