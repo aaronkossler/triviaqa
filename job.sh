@@ -7,4 +7,7 @@
 #SBATCH --error=error.txt
 #SBATCH --job-name=t5_pipeline
 
+pip install --no-index --upgrade pip
+pip install -r --no-index triviaqa/requirements.txt
+
 python t5_pipeline.py

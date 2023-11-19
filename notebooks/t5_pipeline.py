@@ -9,14 +9,7 @@ Original file is located at
 # TriviaQA
 """
 
-!git clone https://github.com/aaronkossler/triviaqa.git
-
 """## Import Dataset"""
-
-# Commented out IPython magic to ensure Python compatibility.
-# %%bash
-# 
-# pip install datasets
 
 from datasets import load_dataset
 
@@ -77,14 +70,7 @@ with open("triviaqa/sets/evaluation.json", "w") as f:
 
 """## Preprocessing"""
 
-
-
 """## Model Training"""
-
-!pip install transformers
-!pip install evaluate
-!pip install rouge
-
 
 import torch
 import json
@@ -104,6 +90,7 @@ import matplotlib.pyplot as plt
 from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration, T5TokenizerFast
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 """### Hyperparameters"""
@@ -112,12 +99,13 @@ TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
 MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
 MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
-Q_LEN = 256   # Question Length
-T_LEN = 32    # Target Length
+Q_LEN = 256  # Question Length
+T_LEN = 32  # Target Length
 BATCH_SIZE = 8
 DEVICE = "cuda:0"
 
 """### Extracting context, question, and answers from the dataset"""
+
 
 def prepare_data(data):
     articles = []
@@ -136,10 +124,12 @@ def prepare_data(data):
 
     return articles
 
+
 data = prepare_data(trivia_qa_wikipedia["train"])
 
 # Create a Dataframe
 data = pd.DataFrame(data)
+
 
 class QA_Dataset(Dataset):
     def __init__(self, tokenizer, dataframe, q_len, t_len):
@@ -160,7 +150,7 @@ class QA_Dataset(Dataset):
         answer = self.answer[idx]
 
         question_tokenized = self.tokenizer(question, context, max_length=self.q_len, padding="max_length",
-                                                    truncation=True, pad_to_max_length=True, add_special_tokens=True)
+                                            truncation=True, pad_to_max_length=True, add_special_tokens=True)
         answer_tokenized = self.tokenizer(answer, max_length=self.t_len, padding="max_length",
                                           truncation=True, pad_to_max_length=True, add_special_tokens=True)
 
@@ -173,6 +163,7 @@ class QA_Dataset(Dataset):
             "labels": labels,
             "decoder_attention_mask": torch.tensor(answer_tokenized["attention_mask"], dtype=torch.long)
         }
+
 
 # Dataloader
 val_data, train_data = train_test_split(data, shuffle=False, train_size=7900)
@@ -200,11 +191,11 @@ for epoch in range(4):
         decoder_attention_mask = batch["decoder_attention_mask"].to(DEVICE)
 
         outputs = MODEL(
-                          input_ids=input_ids,
-                          attention_mask=attention_mask,
-                          labels=labels,
-                          decoder_attention_mask=decoder_attention_mask
-                        )
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            decoder_attention_mask=decoder_attention_mask
+        )
 
         OPTIMIZER.zero_grad()
         outputs.loss.backward()
@@ -212,7 +203,7 @@ for epoch in range(4):
         train_loss += outputs.loss.item()
         train_batch_count += 1
 
-    #Evaluation
+    # Evaluation
     MODEL.eval()
     for batch in tqdm(val_loader, desc="Validation batches"):
         input_ids = batch["input_ids"].to(DEVICE)
@@ -221,11 +212,11 @@ for epoch in range(4):
         decoder_attention_mask = batch["decoder_attention_mask"].to(DEVICE)
 
         outputs = MODEL(
-                          input_ids=input_ids,
-                          attention_mask=attention_mask,
-                          labels=labels,
-                          decoder_attention_mask=decoder_attention_mask
-                        )
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            decoder_attention_mask=decoder_attention_mask
+        )
 
         OPTIMIZER.zero_grad()
         outputs.loss.backward()
@@ -233,7 +224,8 @@ for epoch in range(4):
         val_loss += outputs.loss.item()
         val_batch_count += 1
 
-    print(f"{epoch+1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss/val_batch_count}")
+    print(
+        f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     MODEL.save_pretrained(f"qa_model-to-batch-{epoch}")
     TOKENIZER.save_pretrained(f"qa_tokenizer-to-batch-{epoch}")
@@ -248,8 +240,10 @@ TOKENIZER.save_pretrained("qa_tokenizer")
 'qa_tokenizer/added_tokens.json',
 'qa_tokenizer/tokenizer.json')"""
 
+
 def predict_answer(context, question, ref_answer=None):
-    inputs = TOKENIZER(question, context, max_length=Q_LEN, padding="max_length", truncation=True, add_special_tokens=True)
+    inputs = TOKENIZER(question, context, max_length=Q_LEN, padding="max_length", truncation=True,
+                       add_special_tokens=True)
 
     input_ids = torch.tensor(inputs["input_ids"], dtype=torch.long).to(DEVICE).unsqueeze(0)
     attention_mask = torch.tensor(inputs["attention_mask"], dtype=torch.long).to(DEVICE).unsqueeze(0)
@@ -262,7 +256,7 @@ def predict_answer(context, question, ref_answer=None):
         # Load the Bleu metric
         bleu = evaluate.load("google_bleu")
         score = bleu.compute(predictions=[predicted_answer],
-                            references=[ref_answer])
+                             references=[ref_answer])
 
         print("Context: \n", context)
         print("\n")
@@ -275,6 +269,7 @@ def predict_answer(context, question, ref_answer=None):
     else:
         return predicted_answer
 
+
 """## Model Prediction"""
 
 # Testing with first Entry
@@ -284,7 +279,7 @@ answer = entry["answer"]["value"]
 
 texts = []
 for text in entry["entity_pages"]["wiki_context"]:
-      texts.append(text)
+    texts.append(text)
 context = " ".join(texts)
 
 predict_answer(context, question, answer)
@@ -295,12 +290,12 @@ for entry in test:
 
     texts = []
     for text in entry["entity_pages"]["wiki_context"]:
-          texts.append(text)
+        texts.append(text)
     context = " ".join(texts)
     predictions[entry["question_id"]] = predict_answer(context, question)
 
 if not os.path.exists("triviaqa/predictions"):
-        os.makedirs("triviaqa/predictions")
+    os.makedirs("triviaqa/predictions")
 
 # Convert the dictionary to a JSON string
 json_string = json.dumps(predictions)
@@ -312,6 +307,7 @@ with open("triviaqa/predictions/t5_predictions.json", "w") as f:
 """## Evaluation"""
 
 import sys
+
 sys.path.append("./triviaqa")
 
 from triviaqa.evaluation.triviaqa_evaluation import evaluate_triviaqa
@@ -324,7 +320,7 @@ prediction_file = 'triviaqa/predictions/t5_predictions.json'
 expected_version = 1.0
 dataset_json = read_triviaqa_data(dataset_file)
 if dataset_json['Version'] != expected_version:
-    print('Evaluation expects v-{} , but got dataset with v-{}'.format(expected_version,dataset_json['Version']),
+    print('Evaluation expects v-{} , but got dataset with v-{}'.format(expected_version, dataset_json['Version']),
           file=sys.stderr)
 key_to_ground_truth = get_key_to_ground_truth(dataset_json)
 predictions = read_json(prediction_file)
