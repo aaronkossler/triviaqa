@@ -6,7 +6,8 @@ import datasets
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
 # create data splits
-def create_splits(create_eval = True, write_path = "../eval_splits"):
+# Alternatively, set "Web" as domain
+def create_splits(create_eval = True, write_path = "../eval_splits", domain = "Wikipedia"):
     trivia_qa_wikipedia = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
 
     train_split = trivia_qa_wikipedia["train"].train_test_split(shuffle=False, train_size=7900)
@@ -68,16 +69,16 @@ def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
 
     return evaluation
 
-def write_files(eval_data, write_path):
+def write_files(eval_data, write_path, domain):
     for key, val in eval_data.items():
         output = {
             "Data": val,
-            "Domain": "Wikipedia",
+            "Domain": domain,
             "VerifiedEval": False,
             "Version": 1.0,
         }
         # Write the output to a JSON file
         if not os.path.exists(write_path):
             os.makedirs(write_path)
-        with open(write_path + "/{}.json".format(key), "w") as f:
+        with open(write_path + "/{}_{}.json".format(key, domain), "w") as f:
             json.dump(output, f)
