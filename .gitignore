@@ -92,3 +92,6 @@ ENV/
 
 samples/
 predictions/
+
+# Local data splits
+eval_splits
