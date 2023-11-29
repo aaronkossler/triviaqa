@@ -2,6 +2,7 @@
 
 """## Import Dataset"""
 import sys
+import os
 import torch
 import json
 from tqdm import tqdm
@@ -160,13 +161,6 @@ for epoch in range(2):
 MODEL.save_pretrained("qa_model")
 TOKENIZER.save_pretrained("qa_tokenizer")
 
-# Saved files
-"""('qa_tokenizer/tokenizer_config.json',
- 'qa_tokenizer/special_tokens_map.json',
- 'qa_tokenizer/spiece.model',
-'qa_tokenizer/added_tokens.json',
-'qa_tokenizer/tokenizer.json')"""
-
 
 def predict_answer(context, question, ref_answer=None):
     inputs = TOKENIZER(question, context, max_length=Q_LEN, padding="max_length", truncation=True,
@@ -197,26 +191,20 @@ def predict_answer(context, question, ref_answer=None):
         return predicted_answer
 
 
+test = pd.read_json('../data/verified-wikipedia-dev.json', encoding='utf-8')
+test_data = test["Data"]
+
 """## Model Prediction"""
 
-# Testing with first Entry
-entry = test[0]
-question = entry["question"]
-answer = entry["answer"]["value"]
-
-texts = []
-for text in entry["entity_pages"]["wiki_context"]:
-    texts.append(text)
-context = " ".join(texts)
-
-predict_answer(context, question, answer)
-
 predictions = {}
-for entry in test:
-    question = entry["question"]
+for entry in test_data:
+    question = entry["Question"]
+    answer = entry["Answer"]["Value"]
 
     texts = []
-    for text in entry["entity_pages"]["wiki_context"]:
+    for pages in entry["EntityPages"]:
+        filename = pages["Filename"]
+        text = file = open(f"../evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
     predictions[entry["question_id"]] = predict_answer(context, question)
