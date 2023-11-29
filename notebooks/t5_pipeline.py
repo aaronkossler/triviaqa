@@ -191,7 +191,7 @@ def predict_answer(context, question, ref_answer=None):
         return predicted_answer
 
 
-test = pd.read_json('../data/verified-wikipedia-dev.json', encoding='utf-8')
+test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')
 test_data = test["Data"]
 
 """## Model Prediction"""
