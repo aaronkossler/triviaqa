@@ -92,3 +92,6 @@ ENV/
 
 samples/
 predictions/
+
+# Local LLMs
+notebooks/local_llms/

@@ -8,12 +8,15 @@ import datasets
 # create data splits
 # Alternatively, set "Web" as domain
 def create_splits(create_eval = True, write_path = "../eval_splits", domain = "Wikipedia"):
-    trivia_qa_wikipedia = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
+    if domain == "Wikipedia":
+        trivia_qa = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
+    elif domain == "Web":
+        trivia_qa = datasets.load_dataset('trivia_qa', name="rc.web")
 
-    train_split = trivia_qa_wikipedia["train"].train_test_split(shuffle=False, train_size=7900)
+    train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
     validation = train_split["train"]
     train = train_split["test"]
-    test = trivia_qa_wikipedia["validation"]
+    test = trivia_qa["validation"]
 
     splits = {
         "train": train,
