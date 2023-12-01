@@ -2,31 +2,66 @@
 import json
 import os
 import datasets
+import wget
+import tarfile
+import pandas as pd
+from sklearn.model_selection import train_test_split
+import sys
+sys.path.append("..")
 
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
 # create data splits
-# Alternatively, set "Web" as domain
-def create_splits(create_eval = True, write_path = "../eval_splits", domain = "Wikipedia"):
-    if domain == "Wikipedia":
-        trivia_qa = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
-    elif domain == "Web":
-        trivia_qa = datasets.load_dataset('trivia_qa', name="rc.web")
+# Alternatively, set "web" as domain
+def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = True, write_path = "../eval_splits", domain = "wikipedia"):
+    # download via datasets module
+    if hf_datasets:
+        if domain == "wikipedia":
+            trivia_qa = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
+        elif domain == "web":
+            trivia_qa = datasets.load_dataset('trivia_qa', name="rc.web")
 
-    train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
-    validation = train_split["train"]
-    train = train_split["test"]
-    test = trivia_qa["validation"]
+        train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
+        validation = train_split["train"]
+        train = train_split["test"]
+        test = trivia_qa["validation"]
+    # download from website
+    else:
+        data_path = "../triviaqa_data"
+        #print(bool(os.path.exists(data_path) and os.listdir(data_path)))
+        #exit()
+        if not (os.path.exists(data_path) and os.listdir(data_path)):
+            print("Downloading data...")
+            wget.download("https://nlp.cs.washington.edu/triviaqa/data/triviaqa-rc.tar.gz", "../")
+            with tarfile.open("../triviaqa-rc.tar.gz", "r:gz") as tar:
+                tar.extractall(path=data_path)
 
-    splits = {
-        "train": train,
-        "validation": validation,
-        "test": test
-    }
+        train_val = pd.DataFrame(pd.read_json(data_path+'/qa/wikipedia-train.json', encoding='utf-8'))["Data"]
+        validation, train = train_test_split(train_val, shuffle=False, train_size=7900)
+        test = pd.DataFrame(pd.read_json(data_path+'/qa/verified-wikipedia-dev.json', encoding='utf-8'))["Data"]
 
+    #print(train.info(), train.tolist()[0])
+
+    if as_list_of_dicts:
+        splits = {
+            "train": train.tolist(),
+            "validation": validation.tolist(),
+            "test": test.tolist()
+        }
+    else:
+        splits = {
+            "train": train,
+            "validation": validation,
+            "test": test
+        }
+    """
     if create_eval:
-        eval_data = preprocess_eval_datasets(splits)
-        write_files(eval_data, write_path)
+        #eval_data = preprocess_eval_datasets(splits)
+        eval_data = {
+            "validation": splits["validation"],
+            "test": splits["test"]
+        }
+        write_files(eval_data, write_path, domain)"""
 
     return splits
 
@@ -85,3 +120,13 @@ def write_files(eval_data, write_path, domain):
             os.makedirs(write_path)
         with open(write_path + "/{}_{}.json".format(key, domain), "w") as f:
             json.dump(output, f)
+
+def build_context(item, domain):
+    texts = []
+    for pages in item["EntityPages"]:
+        filename = pages["Filename"]
+        text = open(f"../triviaqa_data/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+        texts.append(text)
+    context = " ".join(texts)
+
+    return context

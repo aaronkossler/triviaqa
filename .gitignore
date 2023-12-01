@@ -95,5 +95,5 @@ predictions/
 
 # Local LLMs
 notebooks/local_llms/
-evidence/
+triviaqa_data/
 sets/

@@ -23,19 +23,17 @@ sys.path.append("..")
 
 read_files = ["test_Wikipedia.json", "validation_Wikipedia.json"]
 
-from data_preprocessing.preprocessing import create_splits, build_context
+from data_preprocessing.preprocessing import create_splits
 
-domain = "wikipedia"
-
-data_splits = create_splits(as_list_of_dicts=True, domain=domain)
+data_splits = create_splits(create_eval = False)
 
 def read_file(path):
     with open("../eval_splits/" + path) as f:
         data = json.load(f)
         return data
 
-#test = read_file(read_files[0])
-#validation = read_file(read_files[1])
+test = read_file(read_files[0])
+validation = read_file(read_files[1])
 
 # %% [markdown]
 # Import relevant modules for langchain
@@ -168,7 +166,6 @@ def rag_answer(question, context, log=False):
 # Initial test of pipeline
 
 # %%
-"""
 def build_context(item):
     texts = []
     for text in item["entity_pages"]["wiki_context"]:
@@ -176,12 +173,12 @@ def build_context(item):
 
     context = " ".join(texts)
 
-    return context"""
+    return context
 
 # %%
 def run_prediction(data, log=False):
     if log: print("Question:", data["Question"])
-    prediction = rag_answer(data["Question"], build_context(data, domain), log=log)
+    prediction = rag_answer(data["question"], build_context(data), log=log)
     if log: print("\nCorrect answer:", data["Answer"])
     return prediction
 
@@ -207,42 +204,93 @@ def evaluate_model(model_name):
     answers = {}
 
     for item in tqdm(data_splits["validation"], desc="Validation Progress"):
-        #print(item)
         prediction = run_prediction(item)
         print(prediction["answer"])
-        qid = item["QuestionId"]
+        qid = item["question_id"]
         context_results[qid] = prediction["context"]
         answers[qid] = prediction["answer"]
 
     save_file(context_results, "../results/rag/"+model_name+"/wiki", "validation_context")
     save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
     
-    """
-    # Test
+
+# %%
+
+import torch
+
+def run_predictions_batch_parallel(data_batch, log=False):
+    predictions = []
+    for data in data_batch:
+        if log:
+            print("Question:", data["question"])
+        prediction = rag_answer(data["question"], build_context(data), log=log)
+        if log:
+            print("\nCorrect answer:", data["answer"])
+        predictions.append(prediction)
+    return predictions
+
+def run_predictions_batch_parallel_wrapper(data, log=False):
+    return run_predictions_batch_parallel(*data, log=log)
+
+def parallel_run(model_name):
     context_results = {}
     answers = {}
+    # Example of batching for validation data
+    batch_size = 5  # You can adjust the batch size as needed
+    validation_data = data_splits["validation"]
 
-    for item in tqdm(data_splits["test"], desc="Test Progress"):
-        prediction = run_prediction(item)
-        qid = item["question_id"]
-        context_results[qid] = prediction["context"]
-        answers[qid] = prediction["answer"]
+    # Split the validation data into batches
+    num_batches = len(validation_data) // batch_size
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    save_file(context_results, "../results/rag/"+model_name+"/wiki", "test_context")
-    save_file(answers, "../results/rag/"+model_name+"/wiki", "test_answers")"""
+    for i in range(num_batches):
+        start_idx = i * batch_size
+        end_idx = (i + 1) * batch_size
+        batch_data = validation_data[start_idx:end_idx]
+
+        # Run predictions for the batch in parallel
+        with torch.no_grad():
+            predictions = torch.nn.parallel.parallel_apply(
+                run_predictions_batch_parallel_wrapper,
+                [(batch_data, False)] * len(batch_data),
+                devices=[device] * len(batch_data)
+            )
+
+        # Process predictions as needed
+        for idx, prediction in enumerate(predictions):
+            qid = batch_data[idx]["question_id"]
+            print(prediction["answer"])
+            context_results[qid] = prediction["context"]
+            answers[qid] = prediction["answer"]
+
+    # Handle the last batch (which may have a size less than batch_size)
+    last_batch_data = validation_data[num_batches * batch_size:]
+    with torch.no_grad():
+        last_batch_predictions = torch.nn.parallel.parallel_apply(
+            run_predictions_batch_parallel,
+            [(last_batch_data, False)] * len(last_batch_data),
+            devices=[device] * len(last_batch_data)
+        )
+    # Process the results for the last batch as needed
+    for idx, prediction in enumerate(last_batch_predictions):
+            qid = last_batch_data[idx]["question_id"]
+            print(prediction["answer"])
+            context_results[qid] = prediction["context"]
+            answers[qid] = prediction["answer"]
+
+    save_file(context_results, "../results/rag/"+model_name+"/wiki", "validation_context")
+    save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
 
 # %%
-print(type(data_splits["validation"]), type(data_splits["validation"][0]))
-evaluate_model("baseline")
+parallel_run("baseline")
 
 # %%
-"""
 item = data_splits["validation"][1108]
 print(item["question"])
 print(build_context(item))
-print(retrieve_wiki_headers_and_paragraphs(build_context(item, domain)))
+print(retrieve_wiki_headers_and_paragraphs(build_context(item)))
 print(item["entity_pages"]["wiki_context"])
 print(item["entity_pages"]["filename"])
 run_prediction(item)
-"""
+
 
