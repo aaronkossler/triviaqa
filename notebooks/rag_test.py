@@ -18,7 +18,6 @@
 # %%
 import json
 import sys
-
 sys.path.append("..")
 
 read_files = ["test_Wikipedia.json", "validation_Wikipedia.json"]
@@ -232,7 +231,6 @@ def evaluate_model(model_name):
     save_file(answers, "../results/rag/"+model_name+"/wiki", "test_answers")"""
 
 # %%
-print(type(data_splits["validation"]), type(data_splits["validation"][0]))
 evaluate_model("baseline")
 
 # %%
