@@ -95,3 +95,5 @@ predictions/
 
 # Local LLMs
 notebooks/local_llms/
+evidence/
+sets/
