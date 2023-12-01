@@ -32,7 +32,7 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
         #exit()
         if not (os.path.exists(data_path) and os.listdir(data_path)):
             print("Downloading data...")
-            wget.download("https://nlp.cs.washington.edu/triviaqa/data/triviaqa-rc.tar.gz", "../")
+            wget.download("https://nlp.cs.washington.edu/triviaqa/data/triviaqa-rc.tar.gz", out="../triviaqa-rc.tar.gz")
             with tarfile.open("../triviaqa-rc.tar.gz", "r:gz") as tar:
                 tar.extractall(path=data_path)
 
