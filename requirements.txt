@@ -6,3 +6,5 @@ datasets
 transformers
 evaluate
 rouge
+torch
+scikit-learn

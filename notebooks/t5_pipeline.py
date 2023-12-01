@@ -36,7 +36,7 @@ train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')
 def prepare_data(data):
     articles = []
 
-    for item in data:
+    for item in tqdm(data, desc="Preparing Data"):
         question = item["Question"]
         answer = item["Answer"]["Value"]
 
