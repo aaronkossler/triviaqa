@@ -84,7 +84,7 @@ model= pipeline(model=model_name)
 model.save_pretrained("local_llms/gpt2")"""
 
 from langchain.llms import HuggingFacePipeline
-llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device=0)
+llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map = 'auto', batch_size=4)
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
@@ -125,66 +125,48 @@ def retrieve_wiki_headers_and_paragraphs(context, langchain=False):
 # - Create Vectorstore with HuggingFaceEmbeddings
 # - Retrieve most similar chunk for the respective prompt
 # - Send prompt to specified LLM and print response
-# 
-# -> Can and should be optimized performancewise!
+# - Recently added: batches for more efficiency
 
 # %%
-def rag_answer(question, context, log=False):
-    #splitter = RecursiveCharacterTextSplitter(
-    #  chunk_size=200, chunk_overlap=0, add_start_index=False
-    #)
-    par = ""
+# Batch pipeline
+def format_retrieval(docs):
+    par = docs[0].page_content
+    return par
 
+def build_retriever(context):
     paragraphs = retrieve_wiki_headers_and_paragraphs(context, langchain=True)
     vectorstore = FAISS.from_texts(texts=paragraphs, embedding=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"))
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
+
+    return retriever
+
+def prepare_rag_chain_data(items):
+    questions = [item["Question"] for item in items]
+    retrievers = [build_retriever(build_context(item, domain)) for item in items]
     
-    prompt = hub.pull("rlm/rag-prompt")
+    inputs = []
+    for i, question in enumerate(questions):
+      item = {"question": question, "context": format_retrieval(retrievers[i].get_relevant_documents(question))}
+      inputs.append(item)
 
-    def format_retrieval(docs):
-      nonlocal par
-      par = docs[0].page_content
-      return par
+    return inputs
 
-    rag_chain = (
-        {"context": retriever | format_retrieval, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        #| StrOutputParser()
-    )
-
-    answer = rag_chain.invoke(question)
-    #for chunk in rag_chain.stream(question):
-      #print(chunk, end="", flush=True)
-      #answer.append(chunk)
-    return {
-       "context": par,
-       "answer": answer
-    }
+prompt = hub.pull("rlm/rag-prompt")
+rag_chain = (
+  RunnablePassthrough()
+  | prompt
+  | llm.bind(stop=["\n\n"])
+)
 
 
-# %% [markdown]
-# Initial test of pipeline
+def batch_prediction(questions):
+    inputs = prepare_rag_chain_data(questions)
+    answers = rag_chain.batch(inputs)
 
-# %%
-"""
-def build_context(item):
-    texts = []
-    for text in item["entity_pages"]["wiki_context"]:
-      texts.append(text)
+    for i, input in enumerate(inputs):
+       input["answer"] = answers[i]
 
-    context = " ".join(texts)
-
-    return context"""
-
-# %%
-def run_prediction(data, log=False):
-    if log: print("Question:", data["Question"])
-    prediction = rag_answer(data["Question"], build_context(data, domain), log=log)
-    if log: print("\nCorrect answer:", data["Answer"])
-    return prediction
-
-#run_prediction(validation["Data"][5], log=True)
+    return inputs
 
 # %% [markdown]
 # ### Collect results for validation and test data set
@@ -200,47 +182,28 @@ def save_file(data, write_path, filename):
 # %%
 from tqdm import tqdm
 
-def evaluate_model(model_name):
+def evaluate_model(model_name, batch_size = 1):
     # Validation
     context_results = {}
     answers = {}
 
-    for item in tqdm(data_splits["validation"], desc="Validation Progress"):
+    def batch(iterable, n=1):
+      l = len(iterable)
+      for ndx in range(0, l, n):
+          yield iterable[ndx:min(ndx + n, l)]
+
+    for item in tqdm(batch(data_splits["validation"], batch_size), desc="Validation Progress"):
         #print(item)
-        prediction = run_prediction(item)
-        print(prediction["answer"])
-        qid = item["QuestionId"]
-        context_results[qid] = prediction["context"]
-        answers[qid] = prediction["answer"]
+        results = batch_prediction(item)
+        for i, prediction in enumerate(results):
+          print(prediction)
+          qid = item[i]["QuestionId"]
+          context_results[qid] = prediction["context"]
+          answers[qid] = prediction["answer"]
 
     save_file(context_results, "../results/rag/"+model_name+"/wiki", "validation_context")
     save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
-    
-    """
-    # Test
-    context_results = {}
-    answers = {}
-
-    for item in tqdm(data_splits["test"], desc="Test Progress"):
-        prediction = run_prediction(item)
-        qid = item["question_id"]
-        context_results[qid] = prediction["context"]
-        answers[qid] = prediction["answer"]
-
-    save_file(context_results, "../results/rag/"+model_name+"/wiki", "test_context")
-    save_file(answers, "../results/rag/"+model_name+"/wiki", "test_answers")"""
 
 # %%
-evaluate_model("baseline")
-
-# %%
-"""
-item = data_splits["validation"][1108]
-print(item["question"])
-print(build_context(item))
-print(retrieve_wiki_headers_and_paragraphs(build_context(item, domain)))
-print(item["entity_pages"]["wiki_context"])
-print(item["entity_pages"]["filename"])
-run_prediction(item)
-"""
+evaluate_model("baseline", batch_size=8)
 
