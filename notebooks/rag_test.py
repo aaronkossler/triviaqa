@@ -14,17 +14,21 @@
 import argparse
 parser = argparse.ArgumentParser()
 
-#argument to set which game variant/rules you want to train an agent for
 parser.add_argument(
     "--batch_size",
     default="8",
     help="Set batch size for GPU inference."
 )
 
-#argument to set the training scenarios for the agent
 parser.add_argument(
     "--variant",
     help="Specify the name of the variant the results should be logged with."
+)
+
+parser.add_argument(
+    "--type",
+    default="validation",
+    help="Specify whether the pipeline should be tested on validation or test data. Has to be either 'validation' or 'test'."
 )
 
 args = parser.parse_args()
@@ -101,7 +105,7 @@ model= pipeline(model=model_name)
 model.save_pretrained("local_llms/gpt2")"""
 
 from langchain.llms import HuggingFacePipeline
-llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map = 'auto', batch_size=4)
+llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
@@ -198,29 +202,33 @@ def save_file(data, write_path, filename):
 
 # %%
 from tqdm import tqdm
+import math
 
-def evaluate_model(model_name, batch_size = 1):
-    # Validation
-    context_results = {}
-    answers = {}
+def evaluate_model(model_name, batch_size, type):
+    data = data_splits[type]
+    
+    results = {}
 
     def batch(iterable, n=1):
       l = len(iterable)
       for ndx in range(0, l, n):
           yield iterable[ndx:min(ndx + n, l)]
 
-    for item in tqdm(batch(data_splits["validation"], batch_size), desc="Validation Progress"):
+    progress_bar = tqdm(total=math.ceil(len(data)/batch_size), desc="Validation Progress", unit="batch")
+
+    for item in batch(data, batch_size):
         #print(item)
-        results = batch_prediction(item)
-        for i, prediction in enumerate(results):
+        answers = batch_prediction(item)
+        for i, prediction in enumerate(answers):
           print(prediction)
           qid = item[i]["QuestionId"]
-          context_results[qid] = prediction["context"]
-          answers[qid] = prediction["answer"]
+          results[qid] = prediction
 
-    save_file(context_results, "../results/rag/"+model_name+"/wiki", "validation_context")
-    save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
+        progress_bar.update(1)
+
+    save_file(results, "../results/rag/"+model_name+"/", "{}_{}_results.json".format("wiki", type))
+
 
 # %%
-evaluate_model(args.variant, batch_size=int(args.batch_size))
+evaluate_model(args.variant, int(args.batch_size), args.type)
 
