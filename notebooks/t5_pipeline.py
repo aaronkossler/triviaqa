@@ -72,8 +72,8 @@ class QA_Dataset(Dataset):
 # Setting Hyperparameters
 # TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
 # MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
-TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_model")
-MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
+TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_tokenizer-epoch-2")
+MODEL = T5ForConditionalGeneration.from_pretrained("qa_model-epoch-2", return_dict=True)
 MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
 Q_LEN = 256  # Question Length
