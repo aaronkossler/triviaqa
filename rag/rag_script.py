@@ -193,10 +193,10 @@ def rag_prediction(model_name, batch_size, type):
 
         progress_bar.update(1)
 
-    save_file(results, "./results/"+model_name+"/", "{}_{}_analysis.json".format("wiki", type))
+    save_file(results, "./results/"+model_name+"/", "{}_{}_analysis".format("wiki", type))
 
     eval_format = {key: inner_dict["answer"] for key, inner_dict in results.items()}
-    save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results.json".format("wiki", type))
+    save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results".format("wiki", type))
 
 
 # %%
