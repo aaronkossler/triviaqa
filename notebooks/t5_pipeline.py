@@ -1,38 +1,21 @@
 # -*- coding: utf-8 -*-
 
-"""## Import Dataset"""
-import sys
 import os
 import torch
 import json
 from tqdm import tqdm
-import torch.nn as nn
 from torch.optim import Adam
 import evaluate  # Bleu
 from torch.utils.data import Dataset, DataLoader, RandomSampler
 import pandas as pd
-import transformers
 from sklearn.model_selection import train_test_split
-from transformers import T5Tokenizer, T5Model, T5ForConditionalGeneration, T5TokenizerFast
+from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
 
 warnings.filterwarnings("ignore")
 
-"""### Hyperparameters"""
 
-TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
-MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
-MODEL.to("cuda")
-OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
-Q_LEN = 256  # Question Length
-T_LEN = 32  # Target Length
-BATCH_SIZE = 8
-DEVICE = "cuda:0"
-
-"""### Extracting context, question, and answers from the dataset"""
-
-train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')
-
+# Function to extract contexts, questions, and answers from the dataset
 def prepare_data(data):
     articles = []
 
@@ -43,7 +26,7 @@ def prepare_data(data):
         texts = []
         for pages in item["EntityPages"]:
             filename = pages["Filename"]
-            text = file=open(f"evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+            text = open(f"evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
             texts.append(text)
         context = " ".join(texts)
 
@@ -51,12 +34,6 @@ def prepare_data(data):
         articles.append(inputs)
 
     return articles
-
-
-data = prepare_data(train["Data"])
-
-# Create a Dataframe
-data = pd.DataFrame(data)
 
 
 class QA_Dataset(Dataset):
@@ -92,11 +69,25 @@ class QA_Dataset(Dataset):
             "decoder_attention_mask": torch.tensor(answer_tokenized["attention_mask"], dtype=torch.long)
         }
 
+# Setting Hyperparameters
+# TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
+# MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
+TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_model")
+MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
+MODEL.to("cuda")
+OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
+Q_LEN = 256  # Question Length
+T_LEN = 32  # Target Length
+BATCH_SIZE = 8
+DEVICE = "cuda:0"
 
-# Dataloader
+# Loading train split from trivia_qa dataset and writing it into a dataframe
+train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')["Data"]
+data = pd.DataFrame(prepare_data(train))
+# Splitting train split according to task (first 7900 validation)
 val_data, train_data = train_test_split(data, shuffle=False, train_size=7900)
-# val_data, train_data = train_test_split(data[:1000], shuffle=False, train_size=100)
 
+# Setting up Samplers and Dataloaders
 train_sampler = RandomSampler(train_data.index)
 val_sampler = RandomSampler(val_data.index)
 
@@ -105,12 +96,18 @@ qa_dataset = QA_Dataset(TOKENIZER, data, Q_LEN, T_LEN)
 train_loader = DataLoader(qa_dataset, batch_size=BATCH_SIZE, sampler=train_sampler)
 val_loader = DataLoader(qa_dataset, batch_size=BATCH_SIZE, sampler=val_sampler)
 
+# Initializing training variables
 train_loss = 0
 val_loss = 0
 train_batch_count = 0
 val_batch_count = 0
 
-for epoch in range(2):
+
+if not os.path.exists("models"):
+    os.makedirs("models")
+
+# Training
+for epoch in range(3):
     MODEL.train()
     for batch in tqdm(train_loader, desc="Training batches"):
         input_ids = batch["input_ids"].to(DEVICE)
@@ -155,11 +152,9 @@ for epoch in range(2):
     print(
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
-    MODEL.save_pretrained(f"qa_model-epoch-{epoch}")
-    TOKENIZER.save_pretrained(f"qa_tokenizer-epoch-{epoch}")
-
-MODEL.save_pretrained("qa_model")
-TOKENIZER.save_pretrained("qa_tokenizer")
+    # Saving Model after an epoch
+    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch+3}")
+    TOKENIZER.save_pretrained(f"models/t5_tokenizer-epoch-{epoch+3}")
 
 
 def predict_answer(context, question, ref_answer=None):
@@ -191,23 +186,22 @@ def predict_answer(context, question, ref_answer=None):
         return predicted_answer
 
 
-test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')
-test_data = test["Data"]
+# Loading test split
+test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')["Data"]
 
-"""## Model Prediction"""
-
+# Model Prediction
 predictions = {}
-for entry in test_data:
+for entry in test:
     question = entry["Question"]
     answer = entry["Answer"]["Value"]
 
     texts = []
     for pages in entry["EntityPages"]:
         filename = pages["Filename"]
-        text = file = open(f"../evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+        text = file = open(f"evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
-    predictions[entry["question_id"]] = predict_answer(context, question)
+    predictions[entry["QuestionId"]] = predict_answer(context, question)
 
 if not os.path.exists("predictions"):
     os.makedirs("predictions")
