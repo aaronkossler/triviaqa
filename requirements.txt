@@ -8,3 +8,8 @@ evaluate
 rouge
 torch
 scikit-learn
+wget
+langchain
+langchainhub
+sentence_transformers
+faiss-gpu

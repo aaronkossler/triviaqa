@@ -92,5 +92,8 @@ ENV/
 
 samples/
 predictions/
-evidence/
+
+# Local LLMs
+notebooks/local_llms/
+triviaqa_data/
 sets/
