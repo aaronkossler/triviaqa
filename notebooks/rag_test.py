@@ -222,5 +222,5 @@ def evaluate_model(model_name, batch_size = 1):
     save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
 
 # %%
-evaluate_model(args.variant, batch_size=args.batch_size)
+evaluate_model(args.variant, batch_size=int(args.batch_size))
 
