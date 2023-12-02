@@ -11,6 +11,23 @@
 !pip3 install pinecone-client==3.0.0rc2
 !pip install faiss-gpu
 """
+import argparse
+parser = argparse.ArgumentParser()
+
+#argument to set which game variant/rules you want to train an agent for
+parser.add_argument(
+    "--batch_size",
+    default="8",
+    help="Set batch size for GPU inference."
+)
+
+#argument to set the training scenarios for the agent
+parser.add_argument(
+    "--variant",
+    help="Specify the name of the variant the results should be logged with."
+)
+
+args = parser.parse_args()
 
 # %% [markdown]
 # ### Load eval data
@@ -205,5 +222,5 @@ def evaluate_model(model_name, batch_size = 1):
     save_file(answers, "../results/rag/"+model_name+"/wiki", "validation_answers")
 
 # %%
-evaluate_model("baseline", batch_size=8)
+evaluate_model(args.variant, batch_size=args.batch_size)
 
