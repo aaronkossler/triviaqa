@@ -38,7 +38,7 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
 
         train_val = pd.DataFrame(pd.read_json(data_path+'/qa/wikipedia-train.json', encoding='utf-8'))["Data"]
         validation, train = train_test_split(train_val, shuffle=False, train_size=7900)
-        test = pd.DataFrame(pd.read_json(data_path+'/qa/verified-wikipedia-dev.json', encoding='utf-8'))["Data"]
+        test = pd.DataFrame(pd.read_json(data_path+'/qa/wikipedia-dev.json', encoding='utf-8'))["Data"]
 
     #print(train.info(), train.tolist()[0])
 
