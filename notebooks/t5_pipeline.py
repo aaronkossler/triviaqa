@@ -69,11 +69,12 @@ class QA_Dataset(Dataset):
             "decoder_attention_mask": torch.tensor(answer_tokenized["attention_mask"], dtype=torch.long)
         }
 
+
 # Setting Hyperparameters
 # TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
 # MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
 TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_tokenizer-epoch-2")
-MODEL = T5ForConditionalGeneration.from_pretrained("qa_model-epoch-2", return_dict=True)
+MODEL = T5ForConditionalGeneration.from_pretrained("models/qa_model-epoch-2", return_dict=True)
 MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
 Q_LEN = 256  # Question Length
@@ -101,7 +102,6 @@ train_loss = 0
 val_loss = 0
 train_batch_count = 0
 val_batch_count = 0
-
 
 if not os.path.exists("models"):
     os.makedirs("models")
@@ -153,8 +153,8 @@ for epoch in range(3):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch+3}")
-    TOKENIZER.save_pretrained(f"models/t5_tokenizer-epoch-{epoch+3}")
+    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch + 3}")
+    TOKENIZER.save_pretrained(f"models/t5_tokenizer-epoch-{epoch + 3}")
 
 
 def predict_answer(context, question, ref_answer=None):
