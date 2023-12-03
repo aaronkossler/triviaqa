@@ -89,9 +89,7 @@ ENV/
 .ropeproject
 
 # Project specific
-
 samples/
-predictions/
 
 # Local LLMs
 notebooks/local_llms/

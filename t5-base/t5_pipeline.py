@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+import sys
+sys.path.append("../")
 import os
 import torch
 import json
@@ -7,10 +8,9 @@ from tqdm import tqdm
 from torch.optim import Adam
 import evaluate  # Bleu
 from torch.utils.data import Dataset, DataLoader, RandomSampler
-import pandas as pd
-from sklearn.model_selection import train_test_split
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
+from data_preprocessing.preprocessing import create_splits
 
 warnings.filterwarnings("ignore")
 
@@ -26,7 +26,7 @@ def prepare_data(data):
         texts = []
         for pages in item["EntityPages"]:
             filename = pages["Filename"]
-            text = open(f"evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+            text = open(f"../trivia_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
             texts.append(text)
         context = " ".join(texts)
 
@@ -83,14 +83,22 @@ BATCH_SIZE = 8
 DEVICE = "cuda:0"
 
 # Loading train split from trivia_qa dataset and writing it into a dataframe
-train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')["Data"]
-data = pd.DataFrame(prepare_data(train))
+# train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')["Data"]
+# data = pd.DataFrame(prepare_data(train))
+
+
 # Splitting train split according to task (first 7900 validation)
-val_data, train_data = train_test_split(data, shuffle=False, train_size=7900)
+# val_data, train_data = train_test_split(data, shuffle=False, train_size=7900)
+
+domain = "wikipedia"
+data_splits = create_splits(domain=domain)
+train = data_splits["train"]
+validation = data_splits["validation"]
+data = validation.append(train, ignore_index=True)
 
 # Setting up Samplers and Dataloaders
-train_sampler = RandomSampler(train_data.index)
-val_sampler = RandomSampler(val_data.index)
+train_sampler = RandomSampler(train.index)
+val_sampler = RandomSampler(validation.index)
 
 qa_dataset = QA_Dataset(TOKENIZER, data, Q_LEN, T_LEN)
 
@@ -107,7 +115,7 @@ if not os.path.exists("models"):
     os.makedirs("models")
 
 # Training
-for epoch in range(3):
+for epoch in range(5):
     MODEL.train()
     for batch in tqdm(train_loader, desc="Training batches"):
         input_ids = batch["input_ids"].to(DEVICE)
@@ -153,8 +161,8 @@ for epoch in range(3):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch + 3}")
-    TOKENIZER.save_pretrained(f"models/t5_tokenizer-epoch-{epoch + 3}")
+    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch + 1}")
+    TOKENIZER.save_pretrained(f"models/t5-tokenizer-epoch-{epoch + 1}")
 
 
 def predict_answer(context, question, ref_answer=None):
@@ -187,7 +195,8 @@ def predict_answer(context, question, ref_answer=None):
 
 
 # Loading test split
-test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')["Data"]
+# test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')["Data"]
+test = data_splits["test"]
 
 # Model Prediction
 predictions = {}
@@ -198,7 +207,7 @@ for entry in test:
     texts = []
     for pages in entry["EntityPages"]:
         filename = pages["Filename"]
-        text = file = open(f"evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+        text = file = open(f"../trivia_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
     predictions[entry["QuestionId"]] = predict_answer(context, question)
