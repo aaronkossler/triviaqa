@@ -11,6 +11,7 @@ from torch.utils.data import Dataset, DataLoader, RandomSampler
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
 from data_preprocessing.preprocessing import create_splits
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
@@ -26,7 +27,7 @@ def prepare_data(data):
         texts = []
         for pages in item["EntityPages"]:
             filename = pages["Filename"]
-            text = open(f"../trivia_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+            text = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
             texts.append(text)
         context = " ".join(texts)
 
@@ -73,8 +74,8 @@ class QA_Dataset(Dataset):
 # Setting Hyperparameters
 # TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
 # MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
-TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_tokenizer-epoch-2")
-MODEL = T5ForConditionalGeneration.from_pretrained("models/qa_model-epoch-2", return_dict=True)
+TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
+MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
 MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
 Q_LEN = 256  # Question Length
@@ -94,7 +95,7 @@ domain = "wikipedia"
 data_splits = create_splits(domain=domain)
 train = data_splits["train"]
 validation = data_splits["validation"]
-data = validation.append(train, ignore_index=True)
+data = pd.DataFrame(prepare_data(pd.concat([validation, train], ignore_index=True)))
 
 # Setting up Samplers and Dataloaders
 train_sampler = RandomSampler(train.index)
@@ -207,7 +208,7 @@ for entry in test:
     texts = []
     for pages in entry["EntityPages"]:
         filename = pages["Filename"]
-        text = file = open(f"../trivia_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+        text = file = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
     predictions[entry["QuestionId"]] = predict_answer(context, question)

@@ -8,8 +8,8 @@ import os
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 from data_preprocessing.preprocessing import create_splits
 
-TOKENIZER = T5TokenizerFast.from_pretrained("models/qa_tokenizer")
-MODEL = T5ForConditionalGeneration.from_pretrained("models/qa_model")
+TOKENIZER = T5TokenizerFast.from_pretrained("google/flan-t5-base")
+MODEL = T5ForConditionalGeneration.from_pretrained("google/flan-t5-baset5_pipeline.py")
 MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
 Q_LEN = 256  # Question Length
@@ -62,7 +62,7 @@ for entry in test:
     texts = []
     for pages in entry["EntityPages"]:
         filename = pages["Filename"]
-        text = file = open(f"../trivia_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+        text = file = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
     predictions[entry["QuestionId"]] = predict_answer(context, question)
