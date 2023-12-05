@@ -6,7 +6,6 @@ import torch
 import json
 from tqdm import tqdm
 from torch.optim import Adam
-import evaluate  # Bleu
 from torch.utils.data import Dataset, DataLoader, RandomSampler
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
@@ -66,7 +65,7 @@ def prepare_data(data):
             articles.append(inputs)
 
         elif args.domain == "web":
-            for pages in item["EntityPages"]:
+            for pages in item["SearchResults"]:
                 filename = pages["Filename"]
                 context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
                 inputs = {"context": context, "question": question, "answer": answer}
