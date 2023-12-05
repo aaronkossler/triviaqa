@@ -115,7 +115,7 @@ MODEL.to("cuda")
 OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
 Q_LEN = 256  # Question Length
 T_LEN = 32  # Target Length
-BATCH_SIZE = args.batch_size
+BATCH_SIZE = int(args.batch_size)
 DEVICE = "cuda:0"
 
 
