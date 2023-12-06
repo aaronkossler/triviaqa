@@ -73,7 +73,7 @@ for entry in test:
         context = " ".join(texts)
         predictions[entry["QuestionId"]] = predict_answer(context, question)
     elif args.domain == "web":
-        for pages in entry["EntityPages"]:
+        for pages in entry["SearchResults"]:
             filename = pages["Filename"]
             context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
             predictions[f"{entry['QuestionId']}--{filename}"] = predict_answer(context, question)
