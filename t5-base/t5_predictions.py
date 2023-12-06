@@ -55,8 +55,7 @@ def predict_answer(context, question, ref_answer=None):
 
 
 # Loading test split
-domain = "wikipedia"
-data_splits = create_splits(domain=domain)
+data_splits = create_splits(domain=args.domain)
 test = data_splits["test"]
 
 # Model Prediction
