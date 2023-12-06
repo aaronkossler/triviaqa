@@ -12,6 +12,7 @@ import warnings
 from data_preprocessing.preprocessing import create_splits
 import pandas as pd
 import argparse
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -190,8 +191,8 @@ for epoch in range(5):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"{args.batch_size}_{args.domain}_{args.model}-epoch-{epoch + 1}")
-    TOKENIZER.save_pretrained(f"{args.batch_size}_{args.domain}_{args.tokenizer}-epoch-{epoch + 1}")
+    MODEL.save_pretrained(f"models/{args.batch_size}_{args.domain}_{args.model}-epoch-{epoch + 1}")
+    TOKENIZER.save_pretrained(f"models/{args.batch_size}_{args.domain}_{args.tokenizer}-epoch-{epoch + 1}")
 
 
 def predict_answer(context, question, ref_answer=None):
@@ -213,7 +214,7 @@ test = data_splits["test"]
 
 # Model Prediction
 predictions = {}
-for entry in test:
+for entry in tqdm(test, desc="Predicting Answers"):
     question = entry["Question"]
 
     if args.domain == "wikipedia":
@@ -233,9 +234,13 @@ for entry in test:
 if not os.path.exists("predictions"):
     os.makedirs("predictions")
 
+if not os.path.exists(f"predictions/{args.domain}"):
+    os.makedirs(f"predictions/{args.domain}")
+
 # Convert the dictionary to a JSON string
 json_string = json.dumps(predictions)
 
 # Write the JSON string to a file
-with open(f"predictions/{args.domain}_{args.model}_predictions.json", "w") as f:
+modelname = re.sub("/", "-", args.model)
+with open(f"predictions/{args.domain}/{modelname}/predictions.json", "w") as f:
     f.write(json_string)

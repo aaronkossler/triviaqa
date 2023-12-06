@@ -7,6 +7,8 @@ import os
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 from data_preprocessing.preprocessing import create_splits
 import argparse
+from tqdm import tqdm
+import re
 
 # server specific fix
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -60,7 +62,7 @@ test = data_splits["test"]
 
 # Model Prediction
 predictions = {}
-for entry in test:
+for entry in tqdm(test, desc="Predicting Answers"):
     question = entry["Question"]
 
     if args.domain == "wikipedia":
@@ -84,5 +86,6 @@ if not os.path.exists("predictions"):
 json_string = json.dumps(predictions)
 
 # Write the JSON string to a file
-with open(f"predictions/{args.domain}_{args.model}_predictions.json", "w") as f:
+modelname = re.sub("/", "-", args.model)
+with open(f"predictions/{args.domain}_{modelname}_predictions.json", "w") as f:
     f.write(json_string)
