@@ -66,11 +66,12 @@ def prepare_data(data):
             articles.append(inputs)
 
         elif args.domain == "web":
-            for pages in item["SearchResults"]:
-                filename = pages["Filename"]
-                context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
-                inputs = {"context": context, "question": question, "answer": answer}
-                articles.append(inputs)
+            for pages in item["SearchResults"], item["EntityPages"]:
+                for page in pages:
+                    filename = page["Filename"]
+                    context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
+                    inputs = {"context": context, "question": question, "answer": answer}
+                    articles.append(inputs)
 
     return articles
 
@@ -141,8 +142,8 @@ val_loss = 0
 train_batch_count = 0
 val_batch_count = 0
 
-if not os.path.exists("models"):
-    os.makedirs("models")
+if not os.path.exists(f"models/{args.domain}"):
+    os.makedirs(f"models/{args.domain}")
 
 # Training
 for epoch in range(5):
@@ -191,8 +192,8 @@ for epoch in range(5):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"models/{args.batch_size}_{args.domain}_{args.model}-epoch-{epoch + 1}")
-    TOKENIZER.save_pretrained(f"models/{args.batch_size}_{args.domain}_{args.tokenizer}-epoch-{epoch + 1}")
+    MODEL.save_pretrained(f"models/{args.domain}/{args.batch_size}_{args.model}-epoch-{epoch + 1}")
+    TOKENIZER.save_pretrained(f"models/{args.domain}/{args.batch_size}_{args.tokenizer}-epoch-{epoch + 1}")
 
 
 def predict_answer(context, question, ref_answer=None):
@@ -226,13 +227,11 @@ for entry in tqdm(test, desc="Predicting Answers"):
         context = " ".join(texts)
         predictions[entry["QuestionId"]] = predict_answer(context, question)
     elif args.domain == "web":
-        for pages in entry["SearchResults"]:
-            filename = pages["Filename"]
-            context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
-            predictions[f"{entry['QuestionId']}--{filename}"] = predict_answer(context, question)
-
-if not os.path.exists("predictions"):
-    os.makedirs("predictions")
+        for pages in entry["SearchResults"], entry["EntityPages"]:
+            for page in pages:
+                filename = page["Filename"]
+                context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
+                predictions[f"{entry['QuestionId']}--{filename}"] = predict_answer(context, question)
 
 if not os.path.exists(f"predictions/{args.domain}"):
     os.makedirs(f"predictions/{args.domain}")
@@ -242,5 +241,5 @@ json_string = json.dumps(predictions)
 
 # Write the JSON string to a file
 modelname = re.sub("/", "-", args.model)
-with open(f"predictions/{args.domain}/{modelname}/predictions.json", "w") as f:
+with open(f"predictions/{args.domain}/{modelname}/{args.batch_size}_predictions.json", "w") as f:
     f.write(json_string)

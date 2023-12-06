@@ -79,13 +79,13 @@ for entry in tqdm(test, desc="Predicting Answers"):
             context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
             predictions[f"{entry['QuestionId']}--{filename}"] = predict_answer(context, question)
 
-if not os.path.exists("predictions"):
-    os.makedirs("predictions")
+if not os.path.exists(f"predictions/{args.domain}"):
+    os.makedirs(f"predictions/{args.domain}")
 
 # Convert the dictionary to a JSON string
 json_string = json.dumps(predictions)
 
 # Write the JSON string to a file
 modelname = re.sub("/", "-", args.model)
-with open(f"predictions/{args.domain}_{modelname}_predictions.json", "w") as f:
+with open(f"predictions/{args.domain}/{modelname}/{args.batch_size}_predictions.json", "w") as f:
     f.write(json_string)
