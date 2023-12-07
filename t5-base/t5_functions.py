@@ -54,10 +54,13 @@ class Predictor:
                 context = " ".join(texts)
                 predictions[entry["QuestionId"]] = self.predict_answer(context, question)
             elif self.domain == "web":
-                for pages in entry["SearchResults"], entry["EntityPages"]:
-                    for page in pages:
-                        filename = page["Filename"]
-                        context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
-                        predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
+                for result in entry["SearchResults"]:
+                    filename = result["Filename"]
+                    context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
+                    predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
+                for page in entry["SearchResults"]:
+                    filename = page["Filename"]
+                    context = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+                    predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
 
         return predictions

@@ -81,12 +81,16 @@ def prepare_data(data):
             articles.append(inputs)
 
         elif args.domain == "web":
-            for pages in item["SearchResults"], item["EntityPages"]:
-                for page in pages:
-                    filename = page["Filename"]
-                    context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
-                    inputs = {"context": context, "question": question, "answer": answer}
-                    articles.append(inputs)
+            for result in item["SearchResults"]:
+                filename = result["Filename"]
+                context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
+                inputs = {"context": context, "question": question, "answer": answer}
+                articles.append(inputs)
+            for page in item["EntityPages"]:
+                filename = page["Filename"]
+                context = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+                inputs = {"context": context, "question": question, "answer": answer}
+                articles.append(inputs)
 
     return articles
 
