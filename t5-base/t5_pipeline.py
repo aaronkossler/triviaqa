@@ -204,4 +204,4 @@ test = data_splits["test"]
 
 predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE)
 predictions = predictor.predict()
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.bath_size}_{modelname}_predictions.json")
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.batch_size}_{modelname}_predictions.json")
