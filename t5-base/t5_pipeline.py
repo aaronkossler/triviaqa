@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 import sys
 sys.path.append("../")
-import os
-import torch
-import json
-from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader, RandomSampler
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
 from data_preprocessing.preprocessing import create_splits
+from t5_functions import *
 import pandas as pd
 import argparse
 import re
@@ -44,7 +41,25 @@ parser.add_argument(
     help="Specify the domain. Either wikipedia or web should be chosen"
 )
 
+parser.add_argument(
+    "-e", "--epochs",
+    default="5",
+    help="Specify for how many epochs the model should be trained"
+)
+
 args = parser.parse_args()
+
+modelname = re.sub("/", "-", args.model)
+
+# Setting Hyperparameters
+TOKENIZER = T5TokenizerFast.from_pretrained(args.tokenizer)
+MODEL = T5ForConditionalGeneration.from_pretrained(args.model, return_dict=True)
+MODEL.to("cuda")
+OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
+Q_LEN = 256  # Question Length
+T_LEN = 32  # Target Length
+BATCH_SIZE = int(args.batch_size)
+DEVICE = "cuda:0"
 
 
 # Function to extract contexts, questions, and answers from the dataset
@@ -110,17 +125,6 @@ class QA_Dataset(Dataset):
         }
 
 
-# Setting Hyperparameters
-TOKENIZER = T5TokenizerFast.from_pretrained(args.tokenizer)
-MODEL = T5ForConditionalGeneration.from_pretrained(args.model, return_dict=True)
-MODEL.to("cuda")
-OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
-Q_LEN = 256  # Question Length
-T_LEN = 32  # Target Length
-BATCH_SIZE = int(args.batch_size)
-DEVICE = "cuda:0"
-
-
 # Splitting train split according to task
 data_splits = create_splits(domain=args.domain)
 train = data_splits["train"]
@@ -146,7 +150,7 @@ if not os.path.exists(f"models/{args.domain}"):
     os.makedirs(f"models/{args.domain}")
 
 # Training
-for epoch in range(5):
+for epoch in range(int(args.epochs)):
     MODEL.train()
     for batch in tqdm(train_loader, desc="Training batches"):
         input_ids = batch["input_ids"].to(DEVICE)
@@ -192,54 +196,12 @@ for epoch in range(5):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"models/{args.domain}/{args.batch_size}_{args.model}-epoch-{epoch + 1}")
-    TOKENIZER.save_pretrained(f"models/{args.domain}/{args.batch_size}_{args.tokenizer}-epoch-{epoch + 1}")
-
-
-def predict_answer(context, question, ref_answer=None):
-    inputs = TOKENIZER(question, context, max_length=Q_LEN, padding="max_length", truncation=True,
-                       add_special_tokens=True)
-
-    input_ids = torch.tensor(inputs["input_ids"], dtype=torch.long).to(DEVICE).unsqueeze(0)
-    attention_mask = torch.tensor(inputs["attention_mask"], dtype=torch.long).to(DEVICE).unsqueeze(0)
-
-    outputs = MODEL.generate(input_ids=input_ids, attention_mask=attention_mask)
-
-    predicted_answer = TOKENIZER.decode(outputs.flatten(), skip_special_tokens=True)
-
-    return predicted_answer
-
+    MODEL.save_pretrained(f"models/{args.domain}/{modelname}/{modelname}-epoch-{epoch + 1}")
+    TOKENIZER.save_pretrained(f"models/{args.domain}/{modelname}/{modelname}-epoch-{epoch + 1}")
 
 # Loading test split
 test = data_splits["test"]
 
-# Model Prediction
-predictions = {}
-for entry in tqdm(test, desc="Predicting Answers"):
-    question = entry["Question"]
-
-    if args.domain == "wikipedia":
-        texts = []
-        for pages in entry["EntityPages"]:
-            filename = pages["Filename"]
-            text = file = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
-            texts.append(text)
-        context = " ".join(texts)
-        predictions[entry["QuestionId"]] = predict_answer(context, question)
-    elif args.domain == "web":
-        for pages in entry["SearchResults"], entry["EntityPages"]:
-            for page in pages:
-                filename = page["Filename"]
-                context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
-                predictions[f"{entry['QuestionId']}--{filename}"] = predict_answer(context, question)
-
-if not os.path.exists(f"predictions/{args.domain}"):
-    os.makedirs(f"predictions/{args.domain}")
-
-# Convert the dictionary to a JSON string
-json_string = json.dumps(predictions)
-
-# Write the JSON string to a file
-modelname = re.sub("/", "-", args.model)
-with open(f"predictions/{args.domain}/{modelname}/{args.batch_size}_predictions.json", "w") as f:
-    f.write(json_string)
+predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE)
+predictions = predictor.predict()
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.bath_size}_{modelname}_predictions.json")
