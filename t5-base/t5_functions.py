@@ -58,7 +58,7 @@ class Predictor:
                     filename = result["Filename"]
                     context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
                     predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
-                for page in entry["SearchResults"]:
+                for page in entry["EntityPages"]:
                     filename = page["Filename"]
                     context = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
                     predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
