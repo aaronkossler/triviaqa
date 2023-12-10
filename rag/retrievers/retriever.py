@@ -1,11 +1,13 @@
 # implement different retrieval strategies for rag
+import platform
+if platform.system() == "Linux":
+    from angle_emb import AnglE, Prompts
+
 import string
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 import torch
-
-#from angle_emb import AnglE, Prompts
 
 # The implementation needs to return the string of the relevant paragraph
 
@@ -64,12 +66,14 @@ class Retriever():
     
 
     # Similarity based: UAE-Large-V1
+    # NOTE: Only works on Linux
     def retrieve_uae_large(self, question, context):
         angle = AnglE.from_pretrained('WhereIsAI/UAE-Large-V1', pooling_strategy='cls').cuda()
         angle.set_prompt(prompt=Prompts.C)
-        vec = angle.encode({'text': 'hello world'}, to_numpy=True)
+        vec = angle.encode({'text': question}, to_numpy=True)
         print(vec)
-        vecs = angle.encode([{'text': 'hello world1'}, {'text': 'hello world2'}], to_numpy=True)
+        converted_pars = [{'text': par} for par in context]
+        vecs = angle.encode(converted_pars, to_numpy=True)
         print(vecs)
 
 
