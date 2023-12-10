@@ -37,7 +37,24 @@ parser.add_argument(
     help="Specify whether the pipeline should be tested on validation or test data. Has to be either 'validation' or 'test'."
 )
 
+parser.add_argument(
+    "--retriever",
+    default="langchain-vs",
+    help="Specify which retriever should be used to obtain the context."
+)
+
+parser.add_argument(
+    "--embeddings",
+    default="all-MiniLM-L6-v2",
+    help="Specify which embeddings the retriever should use (if necessary)."
+)
+
 args = parser.parse_args()
+
+# %%
+# Build retriever with given information
+from retrievers.retriever import Retriever
+retriever = Retriever(args.retriever, args.embeddings)
 
 # %% [markdown]
 # ### Load eval data
@@ -59,10 +76,9 @@ data_splits = create_splits(as_list_of_dicts=True, domain=domain)
 # Import relevant modules for langchain
 
 # %%
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Annoy, FAISS
 from langchain import hub
 from langchain.schema.runnable import RunnablePassthrough
+
 
 # %% [markdown]
 # Create custom LLM class to post requests to t5 (hosted by huggingface)
@@ -77,32 +93,6 @@ llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="t
 # ## Implementation of RAG pipeline
 
 # %% [markdown]
-# Simple paragraph splitter
-
-# %%
-import string
-
-def retrieve_wiki_headers_and_paragraphs(context, langchain=False):
-  data = context.split("\n\n")
-  current_header = "General"
-
-  results = []
-
-  for part in data:
-    # rule of thumb for detecting headers
-    if part[:-1] not in string.punctuation and len(part.split()) < 10:
-      current_header = part
-    else:
-      results.append((current_header, part))
-
-  if results == []:
-    return [context]
-  elif not langchain:
-    return results
-  else:
-    return [item[0] + " - " + item[1] for item in results]
-
-# %% [markdown]
 # Currently most basic version:
 # - Use Splitter to divide text into paragraphs
 # - Create Vectorstore with HuggingFaceEmbeddings
@@ -112,27 +102,15 @@ def retrieve_wiki_headers_and_paragraphs(context, langchain=False):
 
 # %%
 # Batch pipeline
-# get text from retrieved context
-def format_retrieval(docs):
-    par = docs[0].page_content
-    return par
-
-# return retriever for a context
-def build_retriever(context):
-    paragraphs = retrieve_wiki_headers_and_paragraphs(context, langchain=True)
-    vectorstore = FAISS.from_texts(texts=paragraphs, embedding=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"))
-    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
-
-    return retriever
 
 # process batch of items to be prapared for batch prediction
 def prepare_rag_chain_data(items):
     questions = [item["Question"] for item in items]
-    retrievers = [build_retriever(build_context(item, domain)) for item in items]
+    contexts = [build_context(item, domain) for item in items]
     
     inputs = []
     for i, question in enumerate(questions):
-      item = {"question": question, "context": format_retrieval(retrievers[i].get_relevant_documents(question))}
+      item = {"question": question, "context": retriever.retrieve(question, contexts[i])}
       inputs.append(item)
 
     return inputs

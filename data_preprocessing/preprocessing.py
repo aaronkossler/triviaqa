@@ -11,6 +11,19 @@ sys.path.append("..")
 
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
+def build_abs_path():
+    # Get the current working directory
+    current_working_directory = os.getcwd()
+
+    # Find the last occurrence of "triviaqa" in the current working directory
+    last_occurrence_index = current_working_directory.rfind("trivia_qa")
+
+    # Truncate the path after the last occurrence of "triviaqa"
+    truncated_path = current_working_directory[:last_occurrence_index + len("trivia_qa") + 1]
+    data_path = truncated_path + "triviaqa_data/"
+
+    return data_path
+
 # create data splits
 # Alternatively, set "web" as domain
 def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = True, write_path = "../eval_splits", domain = "wikipedia"):
@@ -27,7 +40,7 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
         test = trivia_qa["validation"]
     # download from website
     else:
-        data_path = "../triviaqa_data"
+        data_path = build_abs_path()
         #print(bool(os.path.exists(data_path) and os.listdir(data_path)))
         #exit()
         if not (os.path.exists(data_path) and os.listdir(data_path)):
@@ -124,7 +137,7 @@ def build_context(item, domain):
     texts = []
     for pages in item["EntityPages"]:
         filename = pages["Filename"]
-        text = open(f"../triviaqa_data/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+        text = open(f"{build_abs_path()}/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
         texts.append(text)
     context = " ".join(texts)
 
