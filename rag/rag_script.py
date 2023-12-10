@@ -49,6 +49,12 @@ parser.add_argument(
     help="Specify which embeddings the retriever should use (if necessary)."
 )
 
+parser.add_argument(
+   "--model",
+   default="google/flan-t5-small",
+   help="Specify the model that should be applied for answer generation."
+)
+
 args = parser.parse_args()
 
 # %% [markdown]
@@ -82,7 +88,7 @@ from langchain.schema.runnable import RunnablePassthrough
 # from: https://github.com/AndreasFischer1985/code-snippets/blob/master/py/LangChain_HuggingFace_examples.py
 
 from langchain.llms import HuggingFacePipeline
-llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
+llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
 
 
 # %%
