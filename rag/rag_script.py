@@ -51,11 +51,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-# %%
-# Build retriever with given information
-from retrievers.retriever import Retriever
-retriever = Retriever(args.retriever, args.embeddings)
-
 # %% [markdown]
 # ### Load eval data
 
@@ -88,6 +83,12 @@ from langchain.schema.runnable import RunnablePassthrough
 
 from langchain.llms import HuggingFacePipeline
 llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
+
+
+# %%
+# Build retriever with given information
+from retrievers.retriever import Retriever
+retriever = Retriever(args.retriever, args.embeddings)
 
 # %% [markdown]
 # ## Implementation of RAG pipeline

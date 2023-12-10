@@ -5,6 +5,11 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.retrievers import BM25Retriever
 
+from modelscope.models import Model
+from modelscope.pipelines import pipeline
+from modelscope.preprocessors import TextRankingTransformersPreprocessor
+from modelscope.utils.constant import Tasks
+
 # The implementation needs to return the string of the relevant paragraph
 
 class Retriever():
@@ -17,12 +22,16 @@ class Retriever():
         else:
             raise ValueError("This retriever key does not exist!")
         
+        if self.type == "hlatr":
+            model_id = 'damo/nlp_corom_passage-ranking_english-base'
+            model = Model.from_pretrained(model_id)
+            preprocessor = TextRankingTransformersPreprocessor(model.model_dir)
+            self.hlatr_pipeline = pipeline(task=Tasks.text_ranking, model=model, preprocessor=preprocessor)
+        
         if not embeddings_id or embeddings_id=="bm25":
             self.embeddings = None
         elif embeddings_id:
             self.embeddings = HuggingFaceEmbeddings(model_name=embeddings_id)
-            #device = "cuda" if torch.cuda.is_available() else "cpu"
-            #self.embeddings.to(device)
             
 
     # Basic paragraph splitter
@@ -63,8 +72,23 @@ class Retriever():
             retriever = BM25Retriever.from_texts(texts=paragraphs)
 
         return format_retrieval(retriever.get_relevant_documents(question))
+    
+    def hlatr_retrieval(self, question, context):
+        paragraphs = self.retrieve_wiki_headers_and_paragraphs(context, False)
+
+        input = { 
+            'source_sentence': [question],
+            'sentences_to_compare': paragraphs
+        }
+
+        result = self.hlatr_pipeline(input=input)
+        #print(result)
+        max_index = result["scores"].index(max(result["scores"]))
+        #print (paragraphs[max_index])
+        return paragraphs[max_index]
 
     # Map keywords to functions
     retrieval_funcs = {
-        "langchain-vs": langchain_vectorstore
+        "langchain-vs": langchain_vectorstore,
+        "hlatr": hlatr_retrieval
     }

@@ -14,3 +14,4 @@ langchainhub
 sentence_transformers
 faiss-gpu
 rank_bm25
+modelscope
