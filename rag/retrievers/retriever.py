@@ -1,13 +1,8 @@
 # implement different retrieval strategies for rag
-import platform
-if platform.system() == "Linux":
-    from angle_emb import AnglE, Prompts
-
 import string
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
-import torch
 
 # The implementation needs to return the string of the relevant paragraph
 
@@ -63,22 +58,8 @@ class Retriever():
         retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
 
         return format_retrieval(retriever.get_relevant_documents(question))
-    
-
-    # Similarity based: UAE-Large-V1
-    # NOTE: Only works on Linux
-    def retrieve_uae_large(self, question, context):
-        angle = AnglE.from_pretrained('WhereIsAI/UAE-Large-V1', pooling_strategy='cls').cuda()
-        angle.set_prompt(prompt=Prompts.C)
-        vec = angle.encode({'text': question}, to_numpy=True)
-        print(vec)
-        converted_pars = [{'text': par} for par in context]
-        vecs = angle.encode(converted_pars, to_numpy=True)
-        print(vecs)
-
 
     # Map keywords to functions
     retrieval_funcs = {
-        "langchain-vs": langchain_vectorstore,
-        "uae-large": retrieve_uae_large
+        "langchain-vs": langchain_vectorstore
     }
