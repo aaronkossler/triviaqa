@@ -3,6 +3,7 @@ import string
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
+from langchain.retrievers import BM25Retriever
 
 # The implementation needs to return the string of the relevant paragraph
 
@@ -16,12 +17,13 @@ class Retriever():
         else:
             raise ValueError("This retriever key does not exist!")
         
-        if embeddings_id:
+        if not embeddings_id or embeddings_id=="bm25":
+            self.embeddings = None
+        elif embeddings_id:
             self.embeddings = HuggingFaceEmbeddings(model_name=embeddings_id)
             #device = "cuda" if torch.cuda.is_available() else "cpu"
             #self.embeddings.to(device)
-        else:
-            self.embeddings = None
+            
 
     # Basic paragraph splitter
     def retrieve_wiki_headers_and_paragraphs(self, context, headings=False):
@@ -54,8 +56,11 @@ class Retriever():
 
         # build retriever
         paragraphs = self.retrieve_wiki_headers_and_paragraphs(context, False)
-        vectorstore = FAISS.from_texts(texts=paragraphs, embedding= self.embeddings)
-        retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
+        if self.embeddings:
+            vectorstore = FAISS.from_texts(texts=paragraphs, embedding= self.embeddings)
+            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
+        else:
+            retriever = BM25Retriever.from_texts(texts=paragraphs)
 
         return format_retrieval(retriever.get_relevant_documents(question))
 
