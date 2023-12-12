@@ -128,11 +128,12 @@ class DataGenRetriever(Retriever):
         # extract candidate paragraphs that might contain the relevant information
         candidate_ids = []
         for idx, par in enumerate(pars):
-            if any(el.lower() in par.lower() for el in answer):
+            if any(el.lower() in par.lower() for el in answer["Aliases"]+answer["NormalizedAliases"]):
                 candidate_ids.append(idx)
         if candidate_ids == []:
             print("PROBLEM", answer, pars)
-            candidate_ids = range(len(pars))
+            exit()
+            candidate_ids = list(range(len(pars)))
 
         results = {
             "paragraphs": pars,

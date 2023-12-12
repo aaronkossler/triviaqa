@@ -84,7 +84,7 @@ def prepare_data_chain_data(items):
     
     inputs = []
     for idx, question in enumerate(items):
-      item = retriever.retrieve(question["Question"], contexts[idx], question["Answer"]["Aliases"])
+      item = retriever.retrieve(question["Question"], contexts[idx], question["Answer"])
       inputs.append(item)
 
     return inputs
