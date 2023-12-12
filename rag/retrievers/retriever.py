@@ -132,7 +132,6 @@ class DataGenRetriever(Retriever):
                 candidate_ids.append(idx)
         if candidate_ids == []:
             print("PROBLEM", answer, pars)
-            exit()
             candidate_ids = list(range(len(pars)))
 
         results = {
