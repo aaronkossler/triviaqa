@@ -128,10 +128,11 @@ class DataGenRetriever(Retriever):
         # extract candidate paragraphs that might contain the relevant information
         candidate_ids = []
         for idx, par in enumerate(pars):
-            if any(el in par.lower() for el in answer):
+            if any(el.lower() in par.lower() for el in answer):
                 candidate_ids.append(idx)
         if candidate_ids == []:
-            print("PROBLEM", pars)
+            print("PROBLEM", answer, pars)
+            candidate_ids = range(len(pars))
 
         results = {
             "paragraphs": pars,
@@ -148,7 +149,7 @@ class DataGenRetriever(Retriever):
         }
 
         result = self.hlatr_pipeline(input=input)
-        scores = [(idx, score) for idx, score in enumerate(result["scores"])]
+        scores = [(context["candidate_ids"][idx], score) for idx, score in enumerate(result["scores"])]
         sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)
 
         max = len(sorted_scores)

@@ -67,11 +67,12 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain.llms import HuggingFacePipeline
 llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
 
+topk = 10
 
 # %%
 # Build retriever with given information
 from retrievers.retriever import DataGenRetriever
-retriever = DataGenRetriever(topk=10)
+retriever = DataGenRetriever(topk=topk)
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
@@ -83,7 +84,7 @@ def prepare_data_chain_data(items):
     
     inputs = []
     for idx, question in enumerate(items):
-      item = retriever.retrieve(question["Question"], contexts[idx], question["Answer"]["NormalizedAliases"])
+      item = retriever.retrieve(question["Question"], contexts[idx], question["Answer"]["Aliases"])
       inputs.append(item)
 
     return inputs
@@ -108,40 +109,36 @@ def batch_prediction(questions):
     context_data = prepare_data_chain_data(questions)
     
     done = False
-    status_dict = {idx: [0, False] for idx in range(len(questions))}
+    #status_dict = {idx: [0, False] for idx in range(len(questions))}
 
-    sol_par_idxs = [-1]*len(questions)
-    while not done:
+    best_par_idxs = [-1]*len(questions)
+    for k in range(topk):
         #print(questions[0]["Question"])
         #print(context_data["paragraphs"][context_data[idx]["ranking"][status_dict[idx][0]]])
-        inputs = [{"question": question["Question"], "context": context_data[idx]["paragraphs"][context_data[idx]["ranking"][status_dict[idx][0]]]} for idx, question in enumerate(questions) if not status_dict[idx][1]]
+        inputs = [{"question": question["Question"], "context": context_data[idx]["paragraphs"][context_data[idx]["ranking"][k]]} for idx, question in enumerate(questions) if best_par_idxs[idx] == -1]
+        input_idxs = [i for i, el in enumerate(best_par_idxs) if el == -1]
         #print(inputs)
         answers = data_chain.batch(inputs)
 
-        done = True
-        for idx, answer in enumerate(answers):
+        for i, answer in enumerate(answers):
+            idx = input_idxs[i]
             if answer.lower() == "yes":
-                status_dict[idx][1] = True
-                sol_par_idxs[idx] = context_data[idx]["ranking"][status_dict[idx][0]]#status_dict[idx][0]
+                best_par_idxs[idx] = context_data[idx]["ranking"][k]#status_dict[idx][0]
                 #print("Best candidate:", questions[idx]["Question"], context_data[idx]["paragraphs"][sol_par_idxs[idx]])
-            else:
-                if status_dict[idx][0] == len(context_data[idx]["ranking"]) - 1:
-                    status_dict[idx][1] = True
-                    sol_par_idxs[idx] = context_data[idx]["ranking"][0]
-                else:
-                    status_dict[idx][0] += 1
-                    done = False
+            elif k == len(context_data[idx]["ranking"]) - 1:
+                    best_par_idxs[idx] = context_data[idx]["ranking"][0]
+
+        if not -1 in best_par_idxs:
+            break
 
     results = []
     for idx, question in enumerate(questions):
         candidate = context_data[idx]
-        candidate["best_paragraph"] = sol_par_idxs[idx]
+        candidate["best_paragraph"] = best_par_idxs[idx]
         #del candidate["ranking"]
         q_data = {
-            "QuestionId": question["QuestionId"],
             "Question": question["Question"],
             "RetrieverData": candidate
-
         }
         results.append(q_data)
 
@@ -165,9 +162,7 @@ import math
 
 def rag_prediction(model_name, batch_size):
     for key in data_splits.keys():
-        data = data_splits[key][:20]
-        
-        results = []
+        data = data_splits[key]
 
         def batch(iterable, n=1):
             l = len(iterable)
@@ -177,21 +172,12 @@ def rag_prediction(model_name, batch_size):
         progress_bar = tqdm(total=math.ceil(len(data)/batch_size), desc="{} Progress".format(key), unit="batch")
 
         for item in batch(data, batch_size):
-            #print(item)
             answers = batch_prediction(item)
-            """
+            
             for i, prediction in enumerate(answers):
-                print(prediction)
                 qid = item[i]["QuestionId"]
-                #results[qid] = prediction
-                results = results + prediction"""
-            results += answers
+                save_file(prediction, "./data/{}/{}".format(model_name, key), "{}_{}".format("wiki", qid))
             progress_bar.update(1)
-
-        save_file(results, "./data/"+model_name+"/", "{}_{}".format("wiki", key))
-
-        #eval_format = {key: inner_dict["answer"] for key, inner_dict in results.items()}
-        #save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results".format("wiki", type))
 
 
 # %%
