@@ -1,5 +1,6 @@
 # implement different retrieval strategies for rag
 import string
+from nltk.tokenize import RegexpTokenizer
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
@@ -15,9 +16,10 @@ from modelscope.utils.constant import Tasks
 
 class Retriever():
     def retrieve(self, question, context):
-        return self.retrieval_funcs[self.type](self, question, context)
+        pars = self.retrieve_wiki_headers_and_paragraphs(context, self.headers, self.max_len)
+        return self.retrieval_funcs[self.type](self, question, pars)
 
-    def __init__(self, type = None, embeddings_id=None) -> None:
+    def __init__(self, type = None, embeddings_id=None, max_len=10000, headers=False) -> None:
         if type in self.retrieval_funcs.keys():
             self.type = type
         else:
@@ -33,51 +35,76 @@ class Retriever():
             self.embeddings = None
         elif embeddings_id:
             self.embeddings = HuggingFaceEmbeddings(model_name=embeddings_id)
+
+        self.max_len = max_len
+        self.headers = headers
             
 
-    # Basic paragraph splitter
-    def retrieve_wiki_headers_and_paragraphs(self, context, headings=False):
+    def retrieve_wiki_headers_and_paragraphs(self, context, headings=True, max_par_length=100):
         data = context.split("\n\n")
         current_header = "General"
 
         results = []
+
+        # Create a RegexpTokenizer
+        tokenizer = RegexpTokenizer(r'\w+|\$[\d\.]+|\S+')
 
         for part in data:
             # rule of thumb for detecting headers
             if part[:-1] not in string.punctuation and len(part.split()) < 10:
                 current_header = part
             else:
-                #results.append((current_header, part))
-                if headings: part = current_header + " - " + part
-                results.append(part)
+                if headings:
+                    part = current_header + " - " + part
+
+                # Tokenize the paragraph
+                tokens = tokenizer.tokenize(part)
+
+                current_subpar = ""
+                current_length = 0
+
+                for token in tokens:
+                    token_length = len(token.split())
+
+                    if current_length + token_length <= max_par_length:
+                        current_subpar += " " + token
+                        current_length += token_length
+                    else:
+                        # If the current subpar exceeds the max length, split into subparts
+                        if current_length > 0:
+                            if headings:
+                                current_subpar = current_header + " - " + current_subpar
+                            results.append(current_subpar.strip())
+                            current_subpar = token
+                            current_length = token_length
+                        else:
+                            results.append(token)
+
+                if current_subpar:
+                    results.append(current_subpar.strip())
 
         if results == []:
             return [context]
-        else: #if not headings:
-            return results#[item[1] for item in results]
-        #else:
-        #    return [item[0] + " - " + item[1] for item in results]
-        
-
+        else:
+            # print(results)
+            return results
+    
     # Langchain vectorstore retrieval with FAISS that can use any huggingface embedding
-    def langchain_vectorstore(self, question, context):
+    def langchain_vectorstore(self, question, paragraphs):
         # get text from retrieved context
         def format_retrieval(docs):
             par = docs[0].page_content
             return par
 
-        # build retriever
-        paragraphs = self.retrieve_wiki_headers_and_paragraphs(context, False)
         if self.embeddings:
-            vectorstore = FAISS.from_texts(texts=paragraphs, embedding= self.embeddings)
+            vectorstore = FAISS.from_texts(texts=paragraphs, embedding=self.embeddings)
             retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
         else:
             retriever = BM25Retriever.from_texts(texts=paragraphs)
 
         return format_retrieval(retriever.get_relevant_documents(question))
     
-    def hlatr_retrieval(self, question, context):
-        paragraphs = self.retrieve_wiki_headers_and_paragraphs(context, False)
+    def hlatr_retrieval(self, question, paragraphs):
 
         input = { 
             'source_sentence': [question],

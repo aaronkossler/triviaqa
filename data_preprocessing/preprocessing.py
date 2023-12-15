@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import sys
 sys.path.append("..")
+import re
 
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
@@ -26,7 +27,7 @@ def build_abs_path():
 
 # create data splits
 # Alternatively, set "web" as domain
-def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = True, write_path = "../eval_splits", domain = "wikipedia"):
+def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = False, write_path = "../eval_splits", domain = "wikipedia"):
     # download via datasets module
     if hf_datasets:
         if domain == "wikipedia":
@@ -66,19 +67,22 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
             "validation": validation,
             "test": test
         }
-    """
-    if create_eval:
+
+    if create_eval and as_list_of_dicts:
         #eval_data = preprocess_eval_datasets(splits)
         eval_data = {
             "validation": splits["validation"],
-            "test": splits["test"]
+            "test": splits["test"],
+            "train": splits["train"]
         }
-        write_files(eval_data, write_path, domain)"""
+    write_files(eval_data, write_path, domain)
 
     return splits
+    
+    
 
 # Convert the evaluation data (= validation and test) to the desired format
-def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
+def preprocess_eval_datasets(data, convert_eval = ["validation", "test", "train"]):
     evaluation = {}
 
     for split in convert_eval:
@@ -133,11 +137,14 @@ def write_files(eval_data, write_path, domain):
         with open(write_path + "/{}_{}.json".format(key, domain), "w") as f:
             json.dump(output, f)
 
-def build_context(item, domain):
+def build_context(item, domain, format_text = False):
     texts = []
     for pages in item["EntityPages"]:
         filename = pages["Filename"]
         text = open(f"{build_abs_path()}/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+        if format_text: 
+            text = re.sub(r'\[.*?\]', '', text)
+            text = re.sub(r'File:.*\n', '', text)
         texts.append(text)
     context = " ".join(texts)
 

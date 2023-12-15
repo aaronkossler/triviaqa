@@ -55,6 +55,28 @@ parser.add_argument(
    help="Specify the model that should be applied for answer generation."
 )
 
+parser.add_argument(
+   "--format_text",
+   action='store_const',
+   const=not False, 
+   default=False,
+   help="Specify if the context should be cleaned."
+)
+
+parser.add_argument(
+   "--with_headers",
+   action='store_const',
+   const=not False, 
+   default=False,
+   help="Specify if headers should be prepended to paragraphs."
+)
+
+parser.add_argument(
+   "--max_par_len",
+   default=1000000,
+   help="Specify the maximum length of paragraphs."
+)
+
 args = parser.parse_args()
 
 # %% [markdown]
@@ -94,7 +116,7 @@ llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-gen
 # %%
 # Build retriever with given information
 from retrievers.retriever import Retriever
-retriever = Retriever(args.retriever, args.embeddings)
+retriever = Retriever(args.retriever, args.embeddings, int(args.max_par_len), args.with_headers)
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
@@ -113,7 +135,7 @@ retriever = Retriever(args.retriever, args.embeddings)
 # process batch of items to be prapared for batch prediction
 def prepare_rag_chain_data(items):
     questions = [item["Question"] for item in items]
-    contexts = [build_context(item, domain) for item in items]
+    contexts = [build_context(item, domain, args.format_text) for item in items]
     
     inputs = []
     for i, question in enumerate(questions):

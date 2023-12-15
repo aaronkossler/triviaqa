@@ -37,6 +37,14 @@ parser.add_argument(
    help="Specify the model that should be applied for answer generation."
 )
 
+parser.add_argument(
+   "--format_text",
+   action='store_const',
+   const=not False, 
+   default=False,
+   help="Specify if the context should be cleaned."
+)
+
 args = parser.parse_args()
 
 # %% [markdown]
@@ -80,7 +88,7 @@ retriever = DataGenRetriever(topk=topk)
 # process batch of items to be prapared for batch prediction
 def prepare_data_chain_data(items):
     #questions = [item["Question"] for item in items]
-    contexts = [build_context(item, domain) for item in items]
+    contexts = [build_context(item, domain, args.format_text) for item in items]
     
     inputs = []
     for idx, question in enumerate(items):
@@ -162,7 +170,7 @@ import math
 
 def rag_prediction(model_name, batch_size):
     for key in data_splits.keys():
-        data = data_splits[key]
+        data = data_splits[key][:20]
 
         def batch(iterable, n=1):
             l = len(iterable)
