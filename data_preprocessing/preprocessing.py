@@ -75,7 +75,7 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = F
             "test": splits["test"],
             "train": splits["train"]
         }
-    write_files(eval_data, write_path, domain)
+        write_files(eval_data, write_path, domain)
 
     return splits
     
