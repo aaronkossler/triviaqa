@@ -98,7 +98,7 @@ class Predictor:
                 prediction = pipe.run(
                     query=entry["Question"],
                     params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                predictions[entry['QuestionId']] = prediction["Answers"][0].answer
+                predictions[entry['QuestionId']] = prediction["answers"][0].answer
         if self.domain == "web":
             for entry in tqdm(self.test, desc="Predicting Answers"):
                 for index, page in enumerate(entry["EntityPages"]):
@@ -108,7 +108,7 @@ class Predictor:
                     prediction = pipe.run(
                         query=entry["Question"],
                         params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["Answers"][0].answer
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["answers"][0].answer
                 for index, result in enumerate(entry["SearchResults"]):
                     filename = result["Filename"]
                     retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{filename}"])
@@ -116,5 +116,5 @@ class Predictor:
                     prediction = pipe.run(
                         query=entry["Question"],
                         params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["Answers"][0].answer
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["answers"][0].answer
         return predictions
