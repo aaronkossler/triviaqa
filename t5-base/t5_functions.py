@@ -48,8 +48,8 @@ class Predictor:
                 texts = []
                 for pages in entry["EntityPages"]:
                     filename = pages["Filename"]
-                    text = file = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r",
-                                       encoding="utf-8").read()
+                    text = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r",
+                                encoding="utf-8").read()
                     texts.append(text)
                 context = " ".join(texts)
                 predictions[entry["QuestionId"]] = self.predict_answer(context, question)

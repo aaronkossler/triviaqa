@@ -18,10 +18,11 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
     if hf_datasets:
         if domain == "wikipedia":
             trivia_qa = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
+            train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
         elif domain == "web":
             trivia_qa = datasets.load_dataset('trivia_qa', name="rc.web")
+            train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=9500)
 
-        train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
         validation = train_split["train"]
         train = train_split["test"]
         test = trivia_qa["validation"]
