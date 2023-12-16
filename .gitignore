@@ -95,3 +95,11 @@ samples/
 notebooks/local_llms/
 triviaqa_data/
 sets/
+BERT/checkpoints
+BERT/my_model
+BERT/predictions
+BERT/triviaqa
+.idea
+*.tmp
+*.gz
+quantizied-rag/results
