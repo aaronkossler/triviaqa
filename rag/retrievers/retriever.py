@@ -11,20 +11,30 @@ from modelscope.pipelines import pipeline
 from modelscope.preprocessors import TextRankingTransformersPreprocessor
 from modelscope.utils.constant import Tasks
 
+import spacy
+
+# Load the spaCy English model (you may need to download it first)
+nlp = spacy.load("en_core_web_sm")
+
 # The implementation needs to return the string of the most relevant paragraph (with generate_data=False) or
 # a dict with the keys "context_ids" of the most relevant k paragraphs and "contexts_dict" with all paragraphs 
 
 class Retriever():
     def retrieve(self, question, context):
-        pars = self.retrieve_wiki_headers_and_paragraphs(context, self.headers, self.max_len)
+        pars = self.retrieve_wiki_headers_and_paragraphs(context)
         return self.retrieval_funcs[self.type](self, question, pars)
 
-    def __init__(self, type = None, embeddings_id=None, max_len=10000, headers=False) -> None:
+    def __init__(self, type = None, embeddings_id=None, max_len=10000, headers=False, topx=1) -> None:
         if type in self.retrieval_funcs.keys():
             self.type = type
         else:
             raise ValueError("This retriever key does not exist!")
         
+        if max_len == 10000 and topx != 1:
+            raise ValueError("To use topx_contexts it is required to adapt max_par_len to stay under the max token length of the LLM (512 for flan-t5)!")
+        
+        self.topx = topx
+
         if self.type == "hlatr":
             model_id = 'damo/nlp_corom_passage-ranking_english-base'
             model = Model.from_pretrained(model_id)
@@ -40,45 +50,48 @@ class Retriever():
         self.headers = headers
             
 
-    def retrieve_wiki_headers_and_paragraphs(self, context, headings=True, max_par_length=100):
+    def retrieve_wiki_headers_and_paragraphs(self, context):
         data = context.split("\n\n")
         current_header = "General"
 
         results = []
 
         # Create a RegexpTokenizer
-        tokenizer = RegexpTokenizer(r'\w+|\$[\d\.]+|\S+')
+        #tokenizer = RegexpTokenizer(r'\w+|\$[\d\.]+|\S+')
 
         for part in data:
             # rule of thumb for detecting headers
             if part[:-1] not in string.punctuation and len(part.split()) < 10:
                 current_header = part
             else:
-                if headings:
+                if self.headers:
                     part = current_header + " - " + part
 
-                # Tokenize the paragraph
-                tokens = tokenizer.tokenize(part)
+                # Tokenize the paragraph, original version
+                #tokens = tokenizer.tokenize(part)
+                    
+                # Respect sentences with spacy
+                doc = nlp(part)
 
                 current_subpar = ""
                 current_length = 0
 
-                for token in tokens:
-                    token_length = len(token.split())
+                for sentence in [sent.text for sent in doc.sents]:
+                    token_length = len(sentence.split())
 
-                    if current_length + token_length <= max_par_length:
-                        current_subpar += " " + token
+                    if current_length + token_length <= self.max_len:
+                        current_subpar += " " + sentence
                         current_length += token_length
                     else:
                         # If the current subpar exceeds the max length, split into subparts
                         if current_length > 0:
-                            if headings:
+                            if self.headers:
                                 current_subpar = current_header + " - " + current_subpar
                             results.append(current_subpar.strip())
-                            current_subpar = token
+                            current_subpar = sentence
                             current_length = token_length
                         else:
-                            results.append(token)
+                            results.append(sentence)
 
                 if current_subpar:
                     results.append(current_subpar.strip())
@@ -92,17 +105,27 @@ class Retriever():
     # Langchain vectorstore retrieval with FAISS that can use any huggingface embedding
     def langchain_vectorstore(self, question, paragraphs):
         # get text from retrieved context
-        def format_retrieval(docs):
-            par = docs[0].page_content
+        def format_retrieval(docs, topx):
+            #print(docs)
+            if topx == 1:
+                par = docs[0][0].page_content
+            else:
+                par = ""
+                for i in range(topx):
+                    #par = " ".join([docs[i][0].page_content for i in range(topx)])
+                    if i > 0:
+                        if docs[i][1] > docs[0][0]*1.5:
+                            break
+                    par += docs[i][0].page_content
             return par
 
         if self.embeddings:
             vectorstore = FAISS.from_texts(texts=paragraphs, embedding=self.embeddings)
-            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
+            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": self.topx}, return_parents=False)
+            return format_retrieval(vectorstore.similarity_search_with_score(question, k=self.topx), self.topx)
         else:
             retriever = BM25Retriever.from_texts(texts=paragraphs)
-
-        return format_retrieval(retriever.get_relevant_documents(question))
+            return format_retrieval(retriever.get_relevant_documents(question), self.topx)
     
     def hlatr_retrieval(self, question, paragraphs):
 
@@ -112,9 +135,25 @@ class Retriever():
         }
 
         result = self.hlatr_pipeline(input=input)
-        max_index = result["scores"].index(max(result["scores"]))
-        #print (paragraphs[max_index])
-        return paragraphs[max_index]
+
+        if self.topx == 1:
+            max_index = result["scores"].index(max(result["scores"]))
+            return paragraphs[max_index]
+        else:
+            scores = result["scores"]
+            top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:self.topx]
+
+            concatenated_context = ""
+            for i, idx in enumerate(top_indices):
+                if i != 0:
+                    if scores[idx] < scores[top_indices[0]]*0.5:
+                        break
+                print(i)
+                concatenated_context += paragraphs[idx]
+
+            #print(result, scores, paragraphs, concatenated_context)
+            print(len(concatenated_context.split(" ")))
+            return concatenated_context
 
     # Map keywords to functions
     retrieval_funcs = {

@@ -77,6 +77,12 @@ parser.add_argument(
    help="Specify the maximum length of paragraphs."
 )
 
+parser.add_argument(
+   "--topx_contexts",
+   default=1,
+   help="Specify the number of top contexts that should be concatenated to build the context for the generator (only available with max_par_len)."
+)
+
 args = parser.parse_args()
 
 # %% [markdown]
@@ -116,7 +122,7 @@ llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-gen
 # %%
 # Build retriever with given information
 from retrievers.retriever import Retriever
-retriever = Retriever(args.retriever, args.embeddings, int(args.max_par_len), args.with_headers)
+retriever = Retriever(args.retriever, args.embeddings, int(args.max_par_len), args.with_headers, int(args.topx_contexts))
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
