@@ -10,4 +10,4 @@
 pip install --upgrade pip
 pip install -r ../requirements.txt
 
-python t5_pipeline.py --model deepset/roberta-base-squad2 --domain web --gpu yes
+python pre_pipeline.py --model deepset/roberta-base-squad2 --domain web --gpu yes

@@ -31,6 +31,10 @@ def article_to_document_store(article, question_id):
     return document_store
 
 
+def read_json(path):
+    return open(path, mode="r", encoding="utf-8").read()
+
+
 class Predictor:
     def __init__(self, model, domain, test, gpu):
         self.model = model
@@ -48,8 +52,7 @@ class Predictor:
                 document_store = InMemoryDocumentStore(use_bm25=True)
                 for page in row["EntityPages"]:
                     filename = page["Filename"]
-                    article = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r",
-                                   encoding="utf-8").read()
+                    article = read_json(f"../triviaqa_data/evidence/wikipedia/{filename}")
                     document = {
                         "content": article,
                         "meta": {
@@ -57,26 +60,32 @@ class Predictor:
                         },
                     }
                     document_store.write_documents([document])
-                documents[row["question_id"]] = document_store
+                documents[row["QuestionId"]] = document_store
         if self.domain == "web":
             for row in self.test:
                 for index, page in enumerate(row["EntityPages"]):
                     filename = page["Filename"]
-                    article = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r",
-                                   encoding="utf-8").read()
+                    article = read_json(f"../triviaqa_data/evidence/wikipedia/{filename}")
                     document_store = article_to_document_store(article, row["QuestionId"])
-                    documents[f"{row['QuestionId']}--{row['EntityPages']['Filename'][index]}"] = document_store
+                    documents[f"{row['QuestionId']}--{filename}"] = document_store
                 for index, result in enumerate(row["SearchResults"]):
                     filename = result["Filename"]
-                    article = open(f"../triviaqa_data/evidence/web/{filename}", mode="r",
-                                   encoding="utf-8").read()
+                    article = read_json(f"../triviaqa_data/evidence/web/{filename}")
                     document_store = article_to_document_store(article, row["QuestionId"])
-                    documents[f"{row['QuestionId']}--{row['SearchResults']['Filename'][index]}"] = document_store
+                    documents[f"{row['QuestionId']}--{filename}"] = document_store
 
         return documents
 
     def reader(self):
         return FARMReader(model_name_or_path=self.model, use_gpu=self.gpu)
+
+    def run_pipeline(self, documents, reader, query, top_k):
+        retriever = BM25Retriever(document_store=documents)
+        pipe = ExtractiveQAPipeline(reader, retriever)
+        prediction = pipe.run(
+            query=query,
+            params={"Retriever": {"top_k": top_k}, "Reader": {"top_k": top_k}})
+        return prediction["Answers"][0].answer
 
     def predict(self):
         documents = self.build_document_stores()
@@ -93,17 +102,19 @@ class Predictor:
         if self.domain == "web":
             for entry in tqdm(self.test, desc="Predicting Answers"):
                 for index, page in enumerate(entry["EntityPages"]):
-                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{page['Filename']}"])
+                    filename = page["Filename"]
+                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{filename}"])
                     pipe = ExtractiveQAPipeline(reader, retriever)
                     prediction = pipe.run(
                         query=entry["Question"],
                         params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                    predictions[f"{entry['QuestionId']}--{page['Filename']}"] = prediction["Answers"][0].answer
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["Answers"][0].answer
                 for index, result in enumerate(entry["SearchResults"]):
-                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{result['Filename']}"])
+                    filename = result["Filename"]
+                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{filename}"])
                     pipe = ExtractiveQAPipeline(reader, retriever)
                     prediction = pipe.run(
                         query=entry["Question"],
                         params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                    predictions[f"{entry['QuestionId']}--{result['Filename']}"] = prediction["Answers"][0].answer
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["Answers"][0].answer
         return predictions

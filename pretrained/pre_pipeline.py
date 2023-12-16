@@ -4,6 +4,9 @@ from data_preprocessing.preprocessing import create_splits
 from pre_functions import *
 import argparse
 
+# server specific fix
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 # add cli args
 parser = argparse.ArgumentParser()
 

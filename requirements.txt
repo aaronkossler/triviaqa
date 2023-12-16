@@ -13,3 +13,4 @@ langchain
 langchainhub
 sentence_transformers
 faiss-gpu
+farm-haystack
