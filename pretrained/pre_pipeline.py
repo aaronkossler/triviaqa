@@ -3,6 +3,7 @@ sys.path.append("../")
 from data_preprocessing.preprocessing import create_splits
 from pre_functions import *
 import argparse
+import re
 
 # server specific fix
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -42,4 +43,5 @@ test = data_splits["test"]
 predictor = Predictor(args.model, args.domain, test, args.gpu, args.debug)
 predictions = predictor.predict()
 
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.model}_predictions.json")
+modelname = re.sub("/", "-", args.model)
+save_predictions(predictions, f"predictions/{args.domain}", f"{modelname}_predictions.json")
