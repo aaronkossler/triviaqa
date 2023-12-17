@@ -35,6 +35,18 @@ def read_json(path):
     return open(path, mode="r", encoding="utf-8").read()
 
 
+def run_pipeline(documents, reader, query, top_k):
+    retriever = BM25Retriever(document_store=documents)
+    pipe = ExtractiveQAPipeline(reader, retriever)
+    prediction = pipe.run(
+        query=query,
+        params={"Retriever": {"top_k": top_k}, "Reader": {"top_k": top_k}})
+    if prediction["Answers"][0]:
+        return prediction["Answers"][0].answer
+    else:
+        return ""
+
+
 class Predictor:
     def __init__(self, model, domain, test, gpu, debug):
         self.model = model
@@ -77,19 +89,10 @@ class Predictor:
                     article = read_json(f"../triviaqa_data/evidence/web/{filename}")
                     document_store = article_to_document_store(article, row["QuestionId"])
                     documents[f"{row['QuestionId']}--{filename}"] = document_store
-
         return documents
 
     def reader(self):
         return FARMReader(model_name_or_path=self.model, use_gpu=self.gpu)
-
-    def run_pipeline(self, documents, reader, query, top_k):
-        retriever = BM25Retriever(document_store=documents)
-        pipe = ExtractiveQAPipeline(reader, retriever)
-        prediction = pipe.run(
-            query=query,
-            params={"Retriever": {"top_k": top_k}, "Reader": {"top_k": top_k}})
-        return prediction["Answers"][0].answer
 
     def predict(self):
         documents = self.build_document_stores()
@@ -97,32 +100,27 @@ class Predictor:
         predictions = {}
         if self.domain == "wikipedia":
             for entry in tqdm(self.test, desc="Predicting Answers"):
-                retriever = BM25Retriever(document_store=documents[entry['QuestionId']])
-                pipe = ExtractiveQAPipeline(reader, retriever)
-                prediction = pipe.run(
-                    query=entry["Question"],
-                    params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                predictions[entry['QuestionId']] = prediction["answers"][0].answer
+                prediction = run_pipeline(documents[entry['QuestionId']], reader, entry['Question'], 1)
+                predictions[entry['QuestionId']] = prediction
         if self.domain == "web":
             for entry in tqdm(self.test, desc="Predicting Answers"):
-                for index, page in enumerate(entry["EntityPages"]):
+                for page in entry["EntityPages"]:
                     filename = page["Filename"]
-                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{filename}"])
-                    pipe = ExtractiveQAPipeline(reader, retriever)
-                    prediction = pipe.run(
-                        query=entry["Question"],
-                        params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
-                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["answers"][0].answer
-                for index, result in enumerate(entry["SearchResults"]):
-                    filename = result["Filename"]
-                    retriever = BM25Retriever(document_store=documents[f"{entry['QuestionId']}--{filename}"])
-                    pipe = ExtractiveQAPipeline(reader, retriever)
-                    prediction = pipe.run(
-                        query=entry["Question"],
-                        params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
+                    prediction = run_pipeline(documents[f"{entry['QuestionId']}--{filename}"], reader,
+                                              entry['Question'], 1)
                     if self.debug:
                         print(f"Question: {entry['Question']}")
-                        print(f"Answers: {prediction['answers']}")
+                        print(f"Answers: {prediction}")
                         print(f"Filename: {filename}")
-                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction["answers"][0].answer
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction
+                for result in entry["SearchResults"]:
+                    filename = result["Filename"]
+                    prediction = run_pipeline(documents[f"{entry['QuestionId']}--{filename}"], reader,
+                                              entry['Question'], 1)
+                    if self.debug:
+                        print(f"Question: {entry['Question']}")
+                        print(f"Answers: {prediction}")
+                        print(f"Filename: {filename}")
+                    predictions[f"{entry['QuestionId']}--{filename}"] = prediction
+
         return predictions
