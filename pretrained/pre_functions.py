@@ -41,8 +41,8 @@ def run_pipeline(documents, reader, query, top_k):
     prediction = pipe.run(
         query=query,
         params={"Retriever": {"top_k": top_k}, "Reader": {"top_k": top_k}})
-    if prediction["Answers"][0]:
-        return prediction["Answers"][0].answer
+    if prediction["answers"][0]:
+        return prediction["answers"][0].answer
     else:
         return ""
 
