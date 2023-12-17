@@ -36,7 +36,7 @@ def read_json(path):
 
 
 class Predictor:
-    def __init__(self, model, domain, test, gpu):
+    def __init__(self, model, domain, test, gpu, debug):
         self.model = model
         self.domain = domain
         self.test = test
@@ -44,6 +44,10 @@ class Predictor:
             self.gpu = True
         else:
             self.gpu = False
+        if debug == "yes":
+            self.debug = True
+        else:
+            self.debug = False
 
     def build_document_stores(self):
         documents = {}
@@ -116,5 +120,9 @@ class Predictor:
                     prediction = pipe.run(
                         query=entry["Question"],
                         params={"Retriever": {"top_k": 1}, "Reader": {"top_k": 1}})
+                    if self.debug:
+                        print(f"Question: {entry['Question']}")
+                        print(f"Answers: {prediction['answers']}")
+                        print(f"Filename: {filename}")
                     predictions[f"{entry['QuestionId']}--{filename}"] = prediction["answers"][0].answer
         return predictions

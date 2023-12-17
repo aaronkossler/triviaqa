@@ -27,13 +27,19 @@ parser.add_argument(
     help="Choose whether to use gpu or not. Either yes or no should be chosen"
 )
 
+parser.add_argument(
+    "-b", "--debug",
+    default="no",
+    help="Choose whether to use debug mode or not. Either yes or no should be chosen"
+)
+
 args = parser.parse_args()
 
 # Loading test split
 data_splits = create_splits(domain=args.domain)
 test = data_splits["test"]
 
-predictor = Predictor(args.model, args.domain, test, args.gpu)
+predictor = Predictor(args.model, args.domain, test, args.gpu, args.debug)
 predictions = predictor.predict()
 
 save_predictions(predictions, f"predictions/{args.domain}", f"{args.model}_predictions.json")
