@@ -37,6 +37,58 @@ parser.add_argument(
     help="Specify whether the pipeline should be tested on validation or test data. Has to be either 'validation' or 'test'."
 )
 
+parser.add_argument(
+    "--retriever",
+    default="langchain-vs",
+    help="Specify which retriever should be used to obtain the context."
+)
+
+parser.add_argument(
+    "--embeddings",
+    default="all-MiniLM-L6-v2",
+    help="Specify which embeddings the retriever should use (if necessary)."
+)
+
+parser.add_argument(
+   "--model",
+   default="google/flan-t5-small",
+   help="Specify the model that should be applied for answer generation."
+)
+
+parser.add_argument(
+   "--format_text",
+   action='store_const',
+   const=not False, 
+   default=False,
+   help="Specify if the context should be cleaned."
+)
+
+parser.add_argument(
+   "--with_headers",
+   action='store_const',
+   const=not False, 
+   default=False,
+   help="Specify if headers should be prepended to paragraphs."
+)
+
+parser.add_argument(
+   "--max_par_len",
+   default=1000000,
+   help="Specify the maximum length of paragraphs."
+)
+
+parser.add_argument(
+   "--topx_contexts",
+   default=1,
+   help="Specify the number of top contexts that should be concatenated to build the context for the generator (only available with max_par_len)."
+)
+
+parser.add_argument(
+   "--top_par_thresh",
+   default=0.5,
+   help="Specify the minimum/maximum score that is assigned to paragraphs outside the #1 to be appended to the context (> 1 for faiss, < 1 for hlatr)."
+)
+
 args = parser.parse_args()
 
 # %% [markdown]
@@ -59,10 +111,9 @@ data_splits = create_splits(as_list_of_dicts=True, domain=domain)
 # Import relevant modules for langchain
 
 # %%
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Annoy, FAISS
 from langchain import hub
 from langchain.schema.runnable import RunnablePassthrough
+
 
 # %% [markdown]
 # Create custom LLM class to post requests to t5 (hosted by huggingface)
@@ -71,36 +122,16 @@ from langchain.schema.runnable import RunnablePassthrough
 # from: https://github.com/AndreasFischer1985/code-snippets/blob/master/py/LangChain_HuggingFace_examples.py
 
 from langchain.llms import HuggingFacePipeline
-llm = HuggingFacePipeline.from_model_id(model_id="google/flan-t5-small", task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
+llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
+
+
+# %%
+# Build retriever with given information
+from retrievers.retriever import Retriever
+retriever = Retriever(args.retriever, args.embeddings, int(args.max_par_len), args.with_headers, int(args.topx_contexts), float(args.top_par_thresh))
 
 # %% [markdown]
 # ## Implementation of RAG pipeline
-
-# %% [markdown]
-# Simple paragraph splitter
-
-# %%
-import string
-
-def retrieve_wiki_headers_and_paragraphs(context, langchain=False):
-  data = context.split("\n\n")
-  current_header = "General"
-
-  results = []
-
-  for part in data:
-    # rule of thumb for detecting headers
-    if part[:-1] not in string.punctuation and len(part.split()) < 10:
-      current_header = part
-    else:
-      results.append((current_header, part))
-
-  if results == []:
-    return [context]
-  elif not langchain:
-    return results
-  else:
-    return [item[0] + " - " + item[1] for item in results]
 
 # %% [markdown]
 # Currently most basic version:
@@ -112,27 +143,15 @@ def retrieve_wiki_headers_and_paragraphs(context, langchain=False):
 
 # %%
 # Batch pipeline
-# get text from retrieved context
-def format_retrieval(docs):
-    par = docs[0].page_content
-    return par
-
-# return retriever for a context
-def build_retriever(context):
-    paragraphs = retrieve_wiki_headers_and_paragraphs(context, langchain=True)
-    vectorstore = FAISS.from_texts(texts=paragraphs, embedding=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"))
-    retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1}, return_parents=False)
-
-    return retriever
 
 # process batch of items to be prapared for batch prediction
 def prepare_rag_chain_data(items):
     questions = [item["Question"] for item in items]
-    retrievers = [build_retriever(build_context(item, domain)) for item in items]
+    contexts = [build_context(item, domain, args.format_text) for item in items]
     
     inputs = []
     for i, question in enumerate(questions):
-      item = {"question": question, "context": format_retrieval(retrievers[i].get_relevant_documents(question))}
+      item = {"question": question, "context": retriever.retrieve(question, contexts[i])}
       inputs.append(item)
 
     return inputs
@@ -193,10 +212,10 @@ def rag_prediction(model_name, batch_size, type):
 
         progress_bar.update(1)
 
-    save_file(results, "./results/"+model_name+"/", "{}_{}_analysis.json".format("wiki", type))
+    save_file(results, "./results/"+model_name+"/", "{}_{}_analysis".format("wiki", type))
 
     eval_format = {key: inner_dict["answer"] for key, inner_dict in results.items()}
-    save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results.json".format("wiki", type))
+    save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results".format("wiki", type))
 
 
 # %%

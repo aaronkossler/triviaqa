@@ -8,12 +8,26 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import sys
 sys.path.append("..")
+import re
 
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
+def build_abs_path():
+    # Get the current working directory
+    current_working_directory = os.getcwd()
+
+    # Find the last occurrence of "triviaqa" in the current working directory
+    last_occurrence_index = current_working_directory.rfind("trivia_qa")
+
+    # Truncate the path after the last occurrence of "triviaqa"
+    truncated_path = current_working_directory[:last_occurrence_index + len("trivia_qa") + 1]
+    data_path = truncated_path + "triviaqa_data/"
+
+    return data_path
+
 # create data splits
 # Alternatively, set "web" as domain
-def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = True, write_path = "../eval_splits", domain = "wikipedia"):
+def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = False, write_path = "../eval_splits", domain = "wikipedia"):
     # download via datasets module
     if hf_datasets:
         if domain == "wikipedia":
@@ -28,7 +42,7 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
         test = trivia_qa["validation"]
     # download from website
     else:
-        data_path = "../triviaqa_data"
+        data_path = build_abs_path()
         #print(bool(os.path.exists(data_path) and os.listdir(data_path)))
         #exit()
         if not (os.path.exists(data_path) and os.listdir(data_path)):
@@ -46,7 +60,6 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
             validation, train = train_test_split(train_val, shuffle=False, train_size=9500)
             test = pd.DataFrame(pd.read_json(data_path + '/qa/web-dev.json', encoding='utf-8'))["Data"]
 
-    #print(train.info(), train.tolist()[0])
 
     if as_list_of_dicts:
         splits = {
@@ -60,19 +73,22 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
             "validation": validation,
             "test": test
         }
-    """
-    if create_eval:
+
+    if create_eval and as_list_of_dicts:
         #eval_data = preprocess_eval_datasets(splits)
         eval_data = {
             "validation": splits["validation"],
-            "test": splits["test"]
+            "test": splits["test"],
+            "train": splits["train"]
         }
-        write_files(eval_data, write_path, domain)"""
+        write_files(eval_data, write_path, domain)
 
     return splits
+    
+    
 
 # Convert the evaluation data (= validation and test) to the desired format
-def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
+def preprocess_eval_datasets(data, convert_eval = ["validation", "test", "train"]):
     evaluation = {}
 
     for split in convert_eval:
@@ -127,11 +143,14 @@ def write_files(eval_data, write_path, domain):
         with open(write_path + "/{}_{}.json".format(key, domain), "w") as f:
             json.dump(output, f)
 
-def build_context(item, domain):
+def build_context(item, domain, format_text = False):
     texts = []
     for pages in item["EntityPages"]:
         filename = pages["Filename"]
-        text = open(f"../triviaqa_data/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+        text = open(f"{build_abs_path()}/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+        if format_text: 
+            text = re.sub(r'\[.*?\]', '', text)
+            text = re.sub(r'File:.*\n', '', text)
         texts.append(text)
     context = " ".join(texts)
 
