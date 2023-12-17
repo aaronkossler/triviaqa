@@ -5,6 +5,7 @@ from data_preprocessing.preprocessing import create_splits
 from t5_functions import *
 import argparse
 import re
+from rag.retrievers.retriever import Retriever
 
 # server specific fix
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -19,13 +20,19 @@ parser.add_argument(
 
 parser.add_argument(
     "-t", "--tokenizer",
-    help="Specify which tokenizer should be used. Either set a path or a huggingface model name."
+    help="Specify which tokenizer should be used. Either set a path or a huggingface tokenizer name."
 )
 
 parser.add_argument(
     "-d", "--domain",
     default="wikipedia",
-    help="Specify the domain. Either wikipedia or web should be chosen"
+    help="Specify the domain. Either wikipedia or web should be chosen."
+)
+
+parser.add_argument(
+    "-r", "--retriever",
+    default="hlatr",
+    help="Specify which retriever should be used to obtain the context."
 )
 
 args = parser.parse_args()
@@ -41,7 +48,9 @@ DEVICE = "cuda:0"
 data_splits = create_splits(domain=args.domain)
 test = data_splits["test"]
 
-predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE)
+retriever = Retriever(args.retriever)
+
+predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retriever)
 predictions = predictor.predict()
 
 modelname = re.sub("/", "-", args.model)

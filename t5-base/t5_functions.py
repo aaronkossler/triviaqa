@@ -17,13 +17,14 @@ def save_predictions(predictions, path, filename):
 
 
 class Predictor:
-    def __init__(self, model, tokenizer, domain, test, q_len=256, device="cuda:0"):
+    def __init__(self, model, tokenizer, domain, test, q_len=256, device="cuda:0", retriever=None):
         self.model = model
         self.tokenizer = tokenizer
         self.domain = domain
         self.test = test
         self.q_len = q_len
         self.device = device
+        self.retriever = retriever
 
     def predict_answer(self, context, question):
         inputs = self.tokenizer(question, context, max_length=self.q_len, padding="max_length", truncation=True,
@@ -52,6 +53,8 @@ class Predictor:
                                 encoding="utf-8").read()
                     texts.append(text)
                 context = " ".join(texts)
+                if self.retriever:
+                    context = self.retriever.retrieve(question, context)
                 predictions[entry["QuestionId"]] = self.predict_answer(context, question)
             elif self.domain == "web":
                 for result in entry["SearchResults"]:
