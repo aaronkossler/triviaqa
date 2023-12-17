@@ -24,7 +24,7 @@ class Retriever():
         pars = self.retrieve_wiki_headers_and_paragraphs(context)
         return self.retrieval_funcs[self.type](self, question, pars)
 
-    def __init__(self, type = None, embeddings_id=None, max_len=10000, headers=False, topx=1) -> None:
+    def __init__(self, type = None, embeddings_id=None, max_len=10000, headers=False, topx=1, thresh=0.5) -> None:
         if type in self.retrieval_funcs.keys():
             self.type = type
         else:
@@ -34,6 +34,7 @@ class Retriever():
             raise ValueError("To use topx_contexts it is required to adapt max_par_len to stay under the max token length of the LLM (512 for flan-t5)!")
         
         self.topx = topx
+        self.thresh = thresh
 
         if self.type == "hlatr":
             model_id = 'damo/nlp_corom_passage-ranking_english-base'
@@ -114,7 +115,7 @@ class Retriever():
                 for i in range(topx):
                     #par = " ".join([docs[i][0].page_content for i in range(topx)])
                     if i > 0:
-                        if docs[i][1] > docs[0][0]*1.5:
+                        if docs[i][1] > docs[0][0]*self.thresh:
                             break
                     par += docs[i][0].page_content
             return par
@@ -146,13 +147,11 @@ class Retriever():
             concatenated_context = ""
             for i, idx in enumerate(top_indices):
                 if i != 0:
-                    if scores[idx] < scores[top_indices[0]]*0.5:
+                    if scores[idx] < scores[top_indices[0]]*self.thresh:
                         break
                 print(i)
                 concatenated_context += paragraphs[idx]
 
-            #print(result, scores, paragraphs, concatenated_context)
-            print(len(concatenated_context.split(" ")))
             return concatenated_context
 
     # Map keywords to functions
