@@ -65,4 +65,4 @@ predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retrie
 predictions = predictor.predict()
 
 modelname = re.sub("/", "-", args.model)
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_predictions.json")
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_predictions_{retriever}.json")
