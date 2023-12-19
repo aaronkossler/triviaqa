@@ -35,6 +35,13 @@ parser.add_argument(
     help="Specify which retriever should be used to obtain the context."
 )
 
+parser.add_argument(
+    "--type",
+    default="validation",
+    help="Specify whether the pipeline should be tested on validation or test data. Has to be either 'validation' or "
+         "'test'."
+)
+
 args = parser.parse_args()
 
 # Setting Hyperparameters
@@ -46,7 +53,11 @@ DEVICE = "cuda:0"
 
 # Loading test split
 data_splits = create_splits(domain=args.domain)
-test = data_splits["test"]
+
+if args.type == "validation":
+    test = data_splits["validation"]
+else:
+    test = data_splits["test"]
 
 retriever = Retriever(args.retriever)
 
