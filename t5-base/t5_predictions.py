@@ -31,7 +31,7 @@ parser.add_argument(
 
 parser.add_argument(
     "-r", "--retriever",
-    default="hlatr",
+    default="",
     help="Specify which retriever should be used to obtain the context."
 )
 
@@ -65,4 +65,4 @@ predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retrie
 predictions = predictor.predict()
 
 modelname = re.sub("/", "-", args.model)
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_predictions_{retriever}.json")
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_predictions_{args.retriever}.json")
