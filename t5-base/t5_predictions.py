@@ -31,7 +31,7 @@ parser.add_argument(
 
 parser.add_argument(
     "-r", "--retriever",
-    default="",
+    default=None,
     help="Specify which retriever should be used to obtain the context."
 )
 
