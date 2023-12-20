@@ -94,23 +94,23 @@ class Retriever():
             return [context]
         else:
             return results
-        
-    
-    # Langchain vectorstore retrieval with FAISS that can use any huggingface embedding
-    def langchain_vectorstore(self, question, paragraphs):
-        def format_retrieval(docs, topx):
+
+    # Format obtained retrieval into single context  
+    def format_retrieval(self, docs, topx):
             if topx == 1:
-                par = docs[0][0].page_content
+                par = docs[0].page_content
             else:
                 par = ""
                 for i in range(topx):
-                    par += docs[i][0].page_content
+                    par += docs[i].page_content
 
             return par
-
+    
+    # Langchain vectorstore retrieval with FAISS that can use any huggingface embedding
+    def langchain_vectorstore(self, question, paragraphs):
         vectorstore = FAISS.from_texts(texts=paragraphs, embedding=self.embeddings)
         retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": self.topx}, return_parents=False)
-        return format_retrieval(retriever.get_relevant_documents(question, k=self.topx), self.topx)
+        return self.format_retrieval(retriever.get_relevant_documents(question, k=self.topx), self.topx)
             
 
     # Retrieve with HLATR from modelscope
@@ -141,18 +141,8 @@ class Retriever():
         
     # Retrieve with BM25
     def bm25_retrieval(self, question, paragraphs):
-        def format_retrieval(docs, topx):
-            if topx == 1:
-                par = docs[0].page_content
-            else:
-                par = ""
-                for i in range(topx):
-                    par += docs[i].page_content
-
-            return par
-
         retriever = BM25Retriever.from_texts(texts=paragraphs, k=self.topx)
-        return format_retrieval(retriever.get_relevant_documents(question), self.topx)
+        return self.format_retrieval(retriever.get_relevant_documents(question), self.topx)
 
     # Map keywords to functions
     retrieval_funcs = {
