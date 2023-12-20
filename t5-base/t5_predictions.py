@@ -59,10 +59,13 @@ if args.type == "validation":
 else:
     test = data_splits["test"]
 
-retriever = Retriever(args.retriever)
+if args.retriever:
+    retriever = Retriever(args.retriever)
+else:
+    retriever = None
 
 predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retriever)
 predictions = predictor.predict()
 
 modelname = re.sub("/", "-", args.model)
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_predictions_{args.retriever}.json")
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.domain}_{args.type}_{modelname}_{args.retriever}.json")
