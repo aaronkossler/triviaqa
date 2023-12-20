@@ -1,22 +1,8 @@
-# %% [markdown]
-# RAG Pipeline with LangChain
-
-# %%
-""" Pip installs for Google colab
-!pip install datasets
-!pip install langchain
-!pip install sentence_transformers
-!pip install annoy
-!pip install langchainhub
-!pip3 install pinecone-client==3.0.0rc2
-!pip install faiss-gpu
-"""
-
-# server specific fix
+# Server pecific fix
 import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-# add cli args
+# Add CLI args
 import argparse
 parser = argparse.ArgumentParser()
 
@@ -39,19 +25,19 @@ parser.add_argument(
 
 parser.add_argument(
     "--retriever",
-    default="langchain-vs",
+    default="hlatr",
     help="Specify which retriever should be used to obtain the context."
 )
 
 parser.add_argument(
     "--embeddings",
-    default="all-MiniLM-L6-v2",
+    default="WhereIsAI/UAE-Large-V1",
     help="Specify which embeddings the retriever should use (if necessary)."
 )
 
 parser.add_argument(
    "--model",
-   default="google/flan-t5-small",
+   default="google/flan-t5-base",
    help="Specify the model that should be applied for answer generation."
 )
 
@@ -85,21 +71,16 @@ parser.add_argument(
 
 parser.add_argument(
    "--top_par_thresh",
-   default=0.5,
+   default=0,
    help="Specify the minimum/maximum score that is assigned to paragraphs outside the #1 to be appended to the context (> 1 for faiss, < 1 for hlatr)."
 )
 
 args = parser.parse_args()
 
-# %% [markdown]
-# ### Load eval data
-
-# %%
+# Load data
 import json
 import sys
 sys.path.append("..")
-
-read_files = ["test_Wikipedia.json", "validation_Wikipedia.json"]
 
 from data_preprocessing.preprocessing import create_splits, build_context
 
@@ -107,44 +88,21 @@ domain = "wikipedia"
 
 data_splits = create_splits(as_list_of_dicts=True, domain=domain)
 
-# %% [markdown]
 # Import relevant modules for langchain
-
-# %%
 from langchain import hub
 from langchain.schema.runnable import RunnablePassthrough
 
-
-# %% [markdown]
-# Create custom LLM class to post requests to t5 (hosted by huggingface)
-
-# %%
-# from: https://github.com/AndreasFischer1985/code-snippets/blob/master/py/LangChain_HuggingFace_examples.py
-
+# Load LLM that should act as a generator
 from langchain.llms import HuggingFacePipeline
 llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-generation", pipeline_kwargs={"max_new_tokens": 10}, device_map="auto", batch_size=int(args.batch_size))
 
 
-# %%
 # Build retriever with given information
 from retrievers.retriever import Retriever
 retriever = Retriever(args.retriever, args.embeddings, int(args.max_par_len), args.with_headers, int(args.topx_contexts), float(args.top_par_thresh))
 
-# %% [markdown]
-# ## Implementation of RAG pipeline
-
-# %% [markdown]
-# Currently most basic version:
-# - Use Splitter to divide text into paragraphs
-# - Create Vectorstore with HuggingFaceEmbeddings
-# - Retrieve most similar chunk for the respective prompt
-# - Send prompt to specified LLM and print response
-# - Recently added: batches for more efficiency
-
-# %%
 # Batch pipeline
-
-# process batch of items to be prapared for batch prediction
+# Process batch of items to be prapared for batch prediction
 def prepare_rag_chain_data(items):
     questions = [item["Question"] for item in items]
     contexts = [build_context(item, domain, args.format_text) for item in items]
@@ -156,7 +114,7 @@ def prepare_rag_chain_data(items):
 
     return inputs
 
-# create rag chain as suggested by langchain
+# Create rag chain as suggested by langchain
 prompt = hub.pull("rlm/rag-prompt")
 rag_chain = (
   RunnablePassthrough()
@@ -164,7 +122,7 @@ rag_chain = (
   | llm.bind(stop=["\n\n"])
 )
 
-# execute prediction for a batch of questions
+# Execute prediction for a batch of questions
 def batch_prediction(questions):
     inputs = prepare_rag_chain_data(questions)
     answers = rag_chain.batch(inputs)
@@ -174,11 +132,7 @@ def batch_prediction(questions):
 
     return inputs
 
-# %% [markdown]
-# ### Collect results for specified data set
-
-# %%
-# save files
+# Save files
 import os
 def save_file(data, write_path, filename):
     if not os.path.exists(write_path):
@@ -186,7 +140,8 @@ def save_file(data, write_path, filename):
     with open(write_path + "/{}.json".format(filename), "w") as f:
         json.dump(data, f)
 
-# %%
+
+# Collect results for specified data set
 from tqdm import tqdm
 import math
 
@@ -203,7 +158,6 @@ def rag_prediction(model_name, batch_size, type):
     progress_bar = tqdm(total=math.ceil(len(data)/batch_size), desc="Validation Progress", unit="batch")
 
     for item in batch(data, batch_size):
-        #print(item)
         answers = batch_prediction(item)
         for i, prediction in enumerate(answers):
           print(prediction)
@@ -217,8 +171,5 @@ def rag_prediction(model_name, batch_size, type):
     eval_format = {key: inner_dict["answer"] for key, inner_dict in results.items()}
     save_file(eval_format, "./results/"+model_name+"/", "{}_{}_results".format("wiki", type))
 
-
-# %%
-# start predictions with specified cli params
+# Start predictions with specified cli params
 rag_prediction(args.variant, int(args.batch_size), args.type)
-
