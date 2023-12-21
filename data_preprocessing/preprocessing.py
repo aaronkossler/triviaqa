@@ -111,7 +111,16 @@ def preprocess_eval_datasets(data, convert_eval=["validation", "test", "train"])
             question = item["question"]
             question_id = item["question_id"]
             question_source = item["question_source"]
-            search_results = []
+            search_results = [
+                {
+                    "Description": item["search_results"]["description"][index],
+                    "Filename": item["search_results"]["filename"][index],
+                    "Rank": item["search_results"]["rank"][index],
+                    "Title": item["search_results"]["title"][index],
+                    "Url": item["search_results"]["url"][index]
+                }
+                for index in range(len(item["search_results"]["filename"]))
+            ]
             data_item = {
                 "Answer": answer,
                 "EntityPages": entity_pages,
