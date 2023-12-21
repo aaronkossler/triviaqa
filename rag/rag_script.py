@@ -104,7 +104,7 @@ if os.path.exists(args.model):
     # Load the model and tokenizer from a local checkpoint
     model = T5ForConditionalGeneration.from_pretrained(args.model)
     tokenizer = T5TokenizerFast.from_pretrained(args.model)
-    pipe = pipeline("text2text-generation", model=model, config=f"{args.model}/config.json", tokenizer=tokenizer, device_map="auto")
+    pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device_map="auto")
     llm = HuggingFacePipeline(pipeline=pipe, pipeline_kwargs={"max_new_tokens": 10},
                               batch_size=int(args.batch_size))
 else:
