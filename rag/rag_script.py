@@ -94,6 +94,7 @@ data_splits = create_splits(as_list_of_dicts=True, domain=domain)
 # Import relevant modules for langchain
 from langchain import hub
 from langchain.schema.runnable import RunnablePassthrough
+from langchain.llms import HuggingFacePipeline
 
 # Load LLM that should act as a generator
 if os.path.exists(args.model):
@@ -103,13 +104,11 @@ if os.path.exists(args.model):
     # Load the model and tokenizer from a local checkpoint
     model = T5ForConditionalGeneration.from_pretrained(args.model)
     tokenizer = T5TokenizerFast.from_pretrained(args.model)
-
-    # Create a pipeline
-    llm = pipeline("text2text-generation", model=model, tokenizer=tokenizer, pipeline_kwargs={"max_new_tokens": 10},
-                   device_map="auto", batch_size=int(args.batch_size))
+    pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer,
+                    pipeline_kwargs={"max_new_tokens": 10},
+                    device_map="auto", batch_size=int(args.batch_size))
+    llm = HuggingFacePipeline(pipeline=pipe)
 else:
-    from langchain.llms import HuggingFacePipeline
-
     llm = HuggingFacePipeline.from_model_id(model_id=args.model, task="text2text-generation",
                                             pipeline_kwargs={"max_new_tokens": 10}, device_map="auto",
                                             batch_size=int(args.batch_size))
