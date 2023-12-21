@@ -42,6 +42,14 @@ parser.add_argument(
          "'test'."
 )
 
+parser.add_argument(
+   "--format_text",
+   action='store_const',
+   const=not False,
+   default=False,
+   help="Specify if the context should be cleaned."
+)
+
 args = parser.parse_args()
 
 # Setting Hyperparameters
@@ -65,7 +73,8 @@ else:
     retriever = None
 
 predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retriever)
-predictions = predictor.predict()
+predictions, analysis = predictor.predict(args.format_text)
 
 modelname = re.sub("/", "-", args.model)
-save_predictions(predictions, f"predictions/{args.domain}", f"{args.domain}_{args.type}_{modelname}_{args.retriever}.json")
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.type}_{modelname}_{args.retriever}_{args.format_text}.json")
+save_predictions(analysis, f"predictions/{args.domain}", f"analysis_{args.type}_{modelname}_{args.retriever}_{args.format_text}.json")

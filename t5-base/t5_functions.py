@@ -2,6 +2,7 @@ import torch
 import json
 import os
 from tqdm import tqdm
+from data_preprocessing.preprocessing import cleanup_context
 
 
 def save_predictions(predictions, path, filename):
@@ -40,8 +41,9 @@ class Predictor:
         return predicted_answer
 
     # Model Prediction
-    def predict(self):
+    def predict(self, format_text=False):
         predictions = {}
+        analysis = {}
         for entry in tqdm(self.test, desc="Predicting Answers"):
             question = entry["Question"]
 
@@ -53,9 +55,13 @@ class Predictor:
                                 encoding="utf-8").read()
                     texts.append(text)
                 context = " ".join(texts)
+                if format_text:
+                    context = cleanup_context(context)
                 if self.retriever:
                     context = self.retriever.retrieve(question, context)
-                predictions[entry["QuestionId"]] = self.predict_answer(context, question)
+                answer = self.predict_answer(context, question)
+                predictions[entry["QuestionId"]] = answer
+                analysis[entry["QuestionId"]] = {"question": question, "context": context, "answer": answer}
             elif self.domain == "web":
                 for result in entry["SearchResults"]:
                     filename = result["Filename"]
@@ -66,4 +72,4 @@ class Predictor:
                     context = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
                     predictions[f"{entry['QuestionId']}--{filename}"] = self.predict_answer(context, question)
 
-        return predictions
+        return predictions, analysis
