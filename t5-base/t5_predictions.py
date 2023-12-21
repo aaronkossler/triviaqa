@@ -67,11 +67,13 @@ if args.type == "validation":
 else:
     test = data_splits["test"]
 
+# Initialize retriever
 if args.retriever:
     retriever = Retriever(args.retriever)
 else:
     retriever = None
 
+# Generating predictions
 predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE, retriever)
 predictions, analysis = predictor.predict(args.format_text)
 

@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument(
     "-b", "--batch_size",
-    default="32",
+    default="8",
     help="Set batch size for training."
 )
 
@@ -206,6 +206,7 @@ for epoch in range(int(args.epochs)):
 # Loading test split
 test = data_splits["test"]
 
+# Generating predictions
 predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE)
 predictions = predictor.predict()
 save_predictions(predictions, f"predictions/{args.domain}", f"{args.batch_size}_{modelname}_predictions.json")
