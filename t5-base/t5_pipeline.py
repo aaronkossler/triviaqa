@@ -1,19 +1,65 @@
 # -*- coding: utf-8 -*-
 import sys
 sys.path.append("../")
-import os
-import torch
-import json
-from tqdm import tqdm
 from torch.optim import Adam
-import evaluate  # Bleu
 from torch.utils.data import Dataset, DataLoader, RandomSampler
 from transformers import T5ForConditionalGeneration, T5TokenizerFast
 import warnings
 from data_preprocessing.preprocessing import create_splits
+from t5_functions import *
 import pandas as pd
+import argparse
+import re
 
 warnings.filterwarnings("ignore")
+
+# server specific fix
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+# add cli args
+parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "-b", "--batch_size",
+    default="8",
+    help="Set batch size for training."
+)
+
+parser.add_argument(
+    "-m", "--model",
+    help="Specify which model should be used. Either set a path or a huggingface model name."
+)
+
+parser.add_argument(
+    "-t", "--tokenizer",
+    help="Specify which tokenizer should be used. Either set a path or a huggingface model name."
+)
+
+parser.add_argument(
+    "-d", "--domain",
+    default="wikipedia",
+    help="Specify the domain. Either wikipedia or web should be chosen"
+)
+
+parser.add_argument(
+    "-e", "--epochs",
+    default="5",
+    help="Specify for how many epochs the model should be trained"
+)
+
+args = parser.parse_args()
+
+modelname = re.sub("/", "-", args.model)
+
+# Setting Hyperparameters
+TOKENIZER = T5TokenizerFast.from_pretrained(args.tokenizer)
+MODEL = T5ForConditionalGeneration.from_pretrained(args.model, return_dict=True)
+MODEL.to("cuda")
+OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
+Q_LEN = 256  # Question Length
+T_LEN = 32  # Target Length
+BATCH_SIZE = int(args.batch_size)
+DEVICE = "cuda:0"
 
 
 # Function to extract contexts, questions, and answers from the dataset
@@ -24,15 +70,27 @@ def prepare_data(data):
         question = item["Question"]
         answer = item["Answer"]["Value"]
 
-        texts = []
-        for pages in item["EntityPages"]:
-            filename = pages["Filename"]
-            text = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
-            texts.append(text)
-        context = " ".join(texts)
+        if args.domain == "wikipedia":
+            texts = []
+            for pages in item["EntityPages"]:
+                filename = pages["Filename"]
+                text = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+                texts.append(text)
+            context = " ".join(texts)
+            inputs = {"context": context, "question": question, "answer": answer}
+            articles.append(inputs)
 
-        inputs = {"context": context, "question": question, "answer": answer}
-        articles.append(inputs)
+        elif args.domain == "web":
+            for result in item["SearchResults"]:
+                filename = result["Filename"]
+                context = open(f"../triviaqa_data/evidence/web/{filename}", mode="r", encoding="utf-8").read()
+                inputs = {"context": context, "question": question, "answer": answer}
+                articles.append(inputs)
+            for page in item["EntityPages"]:
+                filename = page["Filename"]
+                context = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
+                inputs = {"context": context, "question": question, "answer": answer}
+                articles.append(inputs)
 
     return articles
 
@@ -71,28 +129,8 @@ class QA_Dataset(Dataset):
         }
 
 
-# Setting Hyperparameters
-# TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
-# MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
-TOKENIZER = T5TokenizerFast.from_pretrained("t5-base")
-MODEL = T5ForConditionalGeneration.from_pretrained("t5-base", return_dict=True)
-MODEL.to("cuda")
-OPTIMIZER = Adam(MODEL.parameters(), lr=0.00001)
-Q_LEN = 256  # Question Length
-T_LEN = 32  # Target Length
-BATCH_SIZE = 8
-DEVICE = "cuda:0"
-
-# Loading train split from trivia_qa dataset and writing it into a dataframe
-# train = pd.read_json('data/wikipedia-train.json', encoding='utf-8')["Data"]
-# data = pd.DataFrame(prepare_data(train))
-
-
-# Splitting train split according to task (first 7900 validation)
-# val_data, train_data = train_test_split(data, shuffle=False, train_size=7900)
-
-domain = "wikipedia"
-data_splits = create_splits(domain=domain)
+# Splitting train split according to task
+data_splits = create_splits(domain=args.domain)
 train = data_splits["train"]
 validation = data_splits["validation"]
 data = pd.DataFrame(prepare_data(pd.concat([validation, train], ignore_index=True)))
@@ -112,11 +150,11 @@ val_loss = 0
 train_batch_count = 0
 val_batch_count = 0
 
-if not os.path.exists("models"):
-    os.makedirs("models")
+if not os.path.exists(f"models/{args.domain}"):
+    os.makedirs(f"models/{args.domain}")
 
 # Training
-for epoch in range(5):
+for epoch in range(int(args.epochs)):
     MODEL.train()
     for batch in tqdm(train_loader, desc="Training batches"):
         input_ids = batch["input_ids"].to(DEVICE)
@@ -162,63 +200,13 @@ for epoch in range(5):
         f"{epoch + 1}/{2} -> Train loss: {train_loss / train_batch_count}\tValidation loss: {val_loss / val_batch_count}")
 
     # Saving Model after an epoch
-    MODEL.save_pretrained(f"models/t5-model-epoch-{epoch + 1}")
-    TOKENIZER.save_pretrained(f"models/t5-tokenizer-epoch-{epoch + 1}")
-
-
-def predict_answer(context, question, ref_answer=None):
-    inputs = TOKENIZER(question, context, max_length=Q_LEN, padding="max_length", truncation=True,
-                       add_special_tokens=True)
-
-    input_ids = torch.tensor(inputs["input_ids"], dtype=torch.long).to(DEVICE).unsqueeze(0)
-    attention_mask = torch.tensor(inputs["attention_mask"], dtype=torch.long).to(DEVICE).unsqueeze(0)
-
-    outputs = MODEL.generate(input_ids=input_ids, attention_mask=attention_mask)
-
-    predicted_answer = TOKENIZER.decode(outputs.flatten(), skip_special_tokens=True)
-
-    if ref_answer:
-        # Load the Bleu metric
-        bleu = evaluate.load("google_bleu")
-        score = bleu.compute(predictions=[predicted_answer],
-                             references=[ref_answer])
-
-        print("Context: \n", context)
-        print("\n")
-        print("Question: \n", question)
-        return {
-            "Reference Answer: ": ref_answer,
-            "Predicted Answer: ": predicted_answer,
-            "BLEU Score: ": score
-        }
-    else:
-        return predicted_answer
-
+    MODEL.save_pretrained(f"models/{args.domain}/{modelname}/{modelname}-epoch-{epoch + 1}")
+    TOKENIZER.save_pretrained(f"models/{args.domain}/{modelname}/{modelname}-epoch-{epoch + 1}")
 
 # Loading test split
-# test = pd.read_json('data/verified-wikipedia-dev.json', encoding='utf-8')["Data"]
 test = data_splits["test"]
 
-# Model Prediction
-predictions = {}
-for entry in test:
-    question = entry["Question"]
-    answer = entry["Answer"]["Value"]
-
-    texts = []
-    for pages in entry["EntityPages"]:
-        filename = pages["Filename"]
-        text = file = open(f"../triviaqa_data/evidence/wikipedia/{filename}", mode="r", encoding="utf-8").read()
-        texts.append(text)
-    context = " ".join(texts)
-    predictions[entry["QuestionId"]] = predict_answer(context, question)
-
-if not os.path.exists("predictions"):
-    os.makedirs("predictions")
-
-# Convert the dictionary to a JSON string
-json_string = json.dumps(predictions)
-
-# Write the JSON string to a file
-with open("predictions/t5_predictions.json", "w") as f:
-    f.write(json_string)
+# Generating predictions
+predictor = Predictor(MODEL, TOKENIZER, args.domain, test, Q_LEN, DEVICE)
+predictions = predictor.predict()
+save_predictions(predictions, f"predictions/{args.domain}", f"{args.batch_size}_{modelname}_predictions.json")

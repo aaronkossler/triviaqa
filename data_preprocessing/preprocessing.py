@@ -7,40 +7,57 @@ import tarfile
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import sys
+
 sys.path.append("..")
+import re
+
 
 # Execute create splits to create the required data splits and write the evaluation sets as jsons
 
+def build_abs_path():
+    # Get the current working directory
+    current_working_directory = os.getcwd()
+
+    # Find the last occurrence of "triviaqa" in the current working directory
+    last_occurrence_index = current_working_directory.rfind("trivia_qa")
+
+    # Truncate the path after the last occurrence of "triviaqa"
+    truncated_path = current_working_directory[:last_occurrence_index + len("trivia_qa") + 1]
+    data_path = truncated_path + "triviaqa_data/"
+
+    return data_path
+
+
 # create data splits
 # Alternatively, set "web" as domain
-def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = True, write_path = "../eval_splits", domain = "wikipedia"):
+def create_splits(hf_datasets=False, as_list_of_dicts=False, create_eval=False, write_path="../eval_splits",
+                  domain="wikipedia"):
+    if domain == "wikipedia":
+        val_size = 7900
+    elif domain == "web":
+        val_size = 9500
     # download via datasets module
     if hf_datasets:
-        if domain == "wikipedia":
-            trivia_qa = datasets.load_dataset('trivia_qa', name="rc.wikipedia")
-        elif domain == "web":
-            trivia_qa = datasets.load_dataset('trivia_qa', name="rc.web")
+        trivia_qa = datasets.load_dataset('trivia_qa', name=f"rc.{domain}")
+        train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=val_size)
 
-        train_split = trivia_qa["train"].train_test_split(shuffle=False, train_size=7900)
         validation = train_split["train"]
         train = train_split["test"]
         test = trivia_qa["validation"]
     # download from website
     else:
-        data_path = "../triviaqa_data"
-        #print(bool(os.path.exists(data_path) and os.listdir(data_path)))
-        #exit()
+        data_path = build_abs_path()
+        # print(bool(os.path.exists(data_path) and os.listdir(data_path)))
+        # exit()
         if not (os.path.exists(data_path) and os.listdir(data_path)):
             print("Downloading data...")
             wget.download("https://nlp.cs.washington.edu/triviaqa/data/triviaqa-rc.tar.gz", out="../triviaqa-rc.tar.gz")
             with tarfile.open("../triviaqa-rc.tar.gz", "r:gz") as tar:
                 tar.extractall(path=data_path)
 
-        train_val = pd.DataFrame(pd.read_json(data_path+'/qa/wikipedia-train.json', encoding='utf-8'))["Data"]
-        validation, train = train_test_split(train_val, shuffle=False, train_size=7900)
-        test = pd.DataFrame(pd.read_json(data_path+'/qa/wikipedia-dev.json', encoding='utf-8'))["Data"]
-
-    #print(train.info(), train.tolist()[0])
+        train_val = pd.DataFrame(pd.read_json(data_path + f'/qa/{domain}-train.json', encoding='utf-8'))["Data"]
+        validation, train = train_test_split(train_val, shuffle=False, train_size=val_size)
+        test = pd.DataFrame(pd.read_json(data_path + f'/qa/{domain}-dev.json', encoding='utf-8'))["Data"]
 
     if as_list_of_dicts:
         splits = {
@@ -54,19 +71,21 @@ def create_splits(hf_datasets = False, as_list_of_dicts = False, create_eval = T
             "validation": validation,
             "test": test
         }
-    """
-    if create_eval:
-        #eval_data = preprocess_eval_datasets(splits)
+
+    if create_eval and as_list_of_dicts:
+        # eval_data = preprocess_eval_datasets(splits)
         eval_data = {
             "validation": splits["validation"],
-            "test": splits["test"]
+            "test": splits["test"],
+            "train": splits["train"]
         }
-        write_files(eval_data, write_path, domain)"""
+        write_files(eval_data, write_path, domain)
 
     return splits
 
+
 # Convert the evaluation data (= validation and test) to the desired format
-def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
+def preprocess_eval_datasets(data, convert_eval=["validation", "test", "train"]):
     evaluation = {}
 
     for split in convert_eval:
@@ -92,7 +111,16 @@ def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
             question = item["question"]
             question_id = item["question_id"]
             question_source = item["question_source"]
-            search_results = []
+            search_results = [
+                {
+                    "Description": item["search_results"]["description"][index],
+                    "Filename": item["search_results"]["filename"][index],
+                    "Rank": item["search_results"]["rank"][index],
+                    "Title": item["search_results"]["title"][index],
+                    "Url": item["search_results"]["url"][index]
+                }
+                for index in range(len(item["search_results"]["filename"]))
+            ]
             data_item = {
                 "Answer": answer,
                 "EntityPages": entity_pages,
@@ -106,6 +134,7 @@ def preprocess_eval_datasets(data, convert_eval = ["validation", "test"]):
         evaluation[split] = converted_data
 
     return evaluation
+
 
 def write_files(eval_data, write_path, domain):
     for key, val in eval_data.items():
@@ -121,12 +150,36 @@ def write_files(eval_data, write_path, domain):
         with open(write_path + "/{}_{}.json".format(key, domain), "w") as f:
             json.dump(output, f)
 
-def build_context(item, domain):
-    texts = []
-    for pages in item["EntityPages"]:
-        filename = pages["Filename"]
-        text = open(f"../triviaqa_data/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
-        texts.append(text)
-    context = " ".join(texts)
+
+def cleanup_context(text):
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'File:.*\n', '', text)
+    return text
+
+
+def page_to_context(page, domain, format_text):
+    filename = page["Filename"]
+    text = open(f"{build_abs_path()}/evidence/{domain}/{filename}", mode="r", encoding="utf-8").read()
+    if format_text:
+        text = cleanup_context(text)
+    return text
+
+
+def build_context(item, domain, format_text=False):
+    context = ""
+    if domain == "wikipedia":
+        texts = []
+        for page in item["EntityPages"]:
+            text = page_to_context(page, domain, format_text)
+            texts.append(text)
+        context = " ".join(texts)
+    if domain == "web":
+        context = {}
+        for page in item["EntityPages"]:
+            text = page_to_context(page, domain, format_text)
+            context[page["Filename"]] = text
+        for result in item["SearchResults"]:
+            text = page_to_context(result, domain, format_text)
+            context[result["Filename"]] = text
 
     return context

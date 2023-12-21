@@ -10,4 +10,4 @@
 pip install --upgrade pip
 pip install -r ../requirements.txt
 
-python t5_predictions.py
+python t5_predictions.py --tokenizer google/flan-t5-base --model google/flan-t5-base
